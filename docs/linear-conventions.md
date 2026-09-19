@@ -428,9 +428,9 @@ Health は Linear の health フィールドで設定し、本文に重ねて書
 
 ### 13.1 識別子
 
-- PROJECT_NAME: Runner Dock / Self-hosted Runner Manager MVP
+- PROJECT_NAME: Runner Dock / Self-hosted Runner Manager MVP（team `Dev`）
 - REPO: `dolquis/Runner_Dock`
-- REPO_LABEL: `repo:Runner_Dock`
+- REPO_LABEL: `repo:Runner_Dock`（`repo` グループ配下）
 - BRANCH: `dolquis/dev-<番号>-<slug>`
 - CANONICAL_DOCS: `docs/02_REQUIREMENTS.md`、`docs/03_ARCHITECTURE.md`、`docs/05_DOMAIN_STATE.md`、`docs/09_SECURITY.md`、`docs/10_IPC_DATA_MODEL.md`、`docs/17_ADR.md`、`docs/20_TRACEABILITY.md`
 
