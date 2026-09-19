@@ -1,2 +1,14 @@
+# エージェントのローカル状態（AGENTS.md「Human Gate と編集禁止対象」）
 .codegraph/
 .serena/
+.context-mode/
+.ctx/
+
+# ハーネスのローカル上書き。共有するのは .claude/settings.json だけにする
+.claude/settings.local.json
+.codex/config.local.toml
+
+# secret とローカル設定
+.env
+.env.*
+!.env.example

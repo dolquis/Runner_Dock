@@ -1,0 +1,32 @@
+#:schema https://developers.openai.com/codex/config-schema.json
+
+# ─────────────────────────────────────────────
+# トップレベル設定（サンドボックス / 承認ポリシー）
+# ─────────────────────────────────────────────
+#
+# TOML はテーブルヘッダ以降のキーがそのテーブルに属するため、トップレベルの
+# スカラ設定（sandbox_mode / approval_policy 等）は全ての [table] ヘッダより
+# 前に書く必要がある。
+
+# workspace-write: リポジトリ内の書き込みは許可する
+sandbox_mode = "workspace-write"
+
+# 重要操作はユーザー承認を仰ぐ
+approval_policy = "on-request"
+
+# ─────────────────────────────────────────────
+# サンドボックス詳細
+# ─────────────────────────────────────────────
+
+[sandbox_workspace_write]
+# MCP HTTP（context7）の参照に必要
+network_access = true
+
+# ─────────────────────────────────────────────
+# MCP サーバー定義（共有。`.mcp.json` と一致させること）
+# ─────────────────────────────────────────────
+
+# Context7: Tauri / React / TypeScript / Rust crate の公式ドキュメント参照
+[mcp_servers.context7]
+url = "https://mcp.context7.com/mcp"
+startup_timeout_sec = 15

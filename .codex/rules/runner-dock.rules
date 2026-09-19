@@ -1,0 +1,98 @@
+# Codex execpolicy rules for Runner Dock。形式:
+# https://learn.chatgpt.com/docs/agent-configuration/rules
+#
+# 方針: allow は「sandbox 外でも承認なしで実行してよい」の意味なので、git の読み取りと
+# AGENTS.md「検証とセルフレビュー」のゲートに限定する。forbidden は AGENTS.md
+# 「Linear・ブランチ・PR」の「main へ直接 push / force push しない」に限定し、それ以外は
+# approval_policy の既定に任せる。prefix 一致なので引数順を変えた迂回形は網羅できない。
+# 最終的な防波堤は GitHub の main 保護である（docs/HUMAN_GATES.md HG-04）。
+# この層は projects.<path>.trust_level = "trusted" のときだけ読まれる。
+
+# --- 禁止 ---
+
+prefix_rule(
+    pattern = ["git", "push", "--force"],
+    decision = "forbidden",
+    justification = "force push は AGENTS.md で禁止。履歴を書き換えない",
+    match = ["git push --force origin feature"],
+    not_match = ["git push -u origin feature"],
+)
+
+prefix_rule(
+    pattern = ["git", "push", "-f"],
+    decision = "forbidden",
+    justification = "force push は AGENTS.md で禁止",
+    match = ["git push -f origin feature"],
+)
+
+prefix_rule(
+    pattern = ["git", "push", "--force-with-lease"],
+    decision = "forbidden",
+    justification = "force push は AGENTS.md で禁止。必要なら人間が実行する",
+)
+
+prefix_rule(
+    pattern = ["git", "push", "origin", "main"],
+    decision = "forbidden",
+    justification = "main へ直接 push しない。PR 経由でマージする",
+    match = ["git push origin main"],
+    not_match = ["git push origin dolquis/dev-1-slug"],
+)
+
+prefix_rule(
+    pattern = ["git", "push", "-u", "origin", "main"],
+    decision = "forbidden",
+    justification = "main へ直接 push しない",
+)
+
+prefix_rule(
+    pattern = ["git", "push", "origin", ["HEAD:main", "HEAD:refs/heads/main", "main:main", "+main"]],
+    decision = "forbidden",
+    justification = "main へ直接 push しない",
+    match = ["git push origin HEAD:main", "git push origin +main"],
+    not_match = ["git push origin HEAD:dolquis/dev-1-slug"],
+)
+
+prefix_rule(
+    pattern = ["git", "push", "--set-upstream", "origin", "main"],
+    decision = "forbidden",
+    justification = "main へ直接 push しない",
+)
+
+# 設計境界: 既存環境を壊す WSL 操作を通常操作に入れない（AGENTS.md 設計境界 6）。
+# 実機検証は docs/HUMAN_GATES.md HG-02 / HG-03 で人間が行う。
+
+prefix_rule(
+    pattern = ["wsl", "--shutdown"],
+    decision = "forbidden",
+    justification = "全 distro を止めるため通常操作に入れない（設計境界 6）",
+)
+
+prefix_rule(
+    pattern = ["wsl", "--unregister"],
+    decision = "forbidden",
+    justification = "distro を破壊するため通常操作に入れない（設計境界 6）",
+)
+
+# --- 許可: git の読み取り ---
+
+prefix_rule(pattern = ["git", "status"], decision = "allow")
+prefix_rule(pattern = ["git", "diff"], decision = "allow")
+prefix_rule(pattern = ["git", "log"], decision = "allow")
+prefix_rule(pattern = ["git", "show"], decision = "allow")
+prefix_rule(pattern = ["git", "merge-base"], decision = "allow")
+prefix_rule(pattern = ["git", "ls-files"], decision = "allow")
+prefix_rule(pattern = ["git", "branch", "--show-current"], decision = "allow")
+prefix_rule(pattern = ["git", "remote", "-v"], decision = "allow")
+prefix_rule(pattern = ["git", "fetch"], decision = "allow")
+prefix_rule(pattern = ["rg"], decision = "allow")
+
+# --- 許可: 文書ゲート ---
+#
+# Rust / Node の検証コマンドは、実装と docs/15_DEVELOPER_GUIDE.md
+# 「初期化後に定義する開発コマンド」が入ってから足す。存在しないコマンドを
+# 先に allow すると、規則が実体と食い違ったまま残る。
+
+prefix_rule(pattern = ["python3", "scripts/docs-lint.py"], decision = "allow")
+prefix_rule(pattern = ["python3", "scripts/check_agent_instruction_size.py"], decision = "allow")
+prefix_rule(pattern = ["pre-commit", "run"], decision = "allow")

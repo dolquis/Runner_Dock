@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "advisorModel": "fable",
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "teammateMode": "in-process",
+  "subagentPromptCacheTtl": "1h",
+  "extraKnownMarketplaces": {
+    "claude-plugins-official": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "commit-commands@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-edit-docs-lint.py",
+            "timeout": 60,
+            "statusMessage": "docs-lint (edited document)"
+          }
+        ]
+      }
+    ]
+  }
+}
