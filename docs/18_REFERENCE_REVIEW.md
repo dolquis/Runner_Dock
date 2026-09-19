@@ -60,7 +60,7 @@ HomeRunのLICENSEはMITです。ただし、本方針はコード取り込みで
 
 | 項目 | 既定の扱い | 決定する時点 |
 |---|---|---|
-| 製品名・repo名 | Runner Dock(2026-09-20決定)。repoは`Runner_Dock` | 商標・既存名の確認は公開前 |
+| 製品名・repo名 | Runner Dock(2026-09-20決定)。repoは`Runner_Dock` | 商標・既存名の確認は製品の配布開始前 |
 | 永続する内部識別子(label、path、pipe名、credential key) | `runnerdock`を決定案とする(ADR-015) | LF-007/008の実Runner登録前(ADR-015) |
 | jobと管理資格情報・管理IPCの境界 | ADR-014の決定案 | LF-005/006/012の検証後、G4で確定 |
 | 公開ライセンス | MIT OR Apache-2.0(2026-09-20決定、ADR-016) | 決定済み。依存のライセンス適合はLF-022で確認 |

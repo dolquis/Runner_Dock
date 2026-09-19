@@ -4,7 +4,7 @@
 
 ## 1. 最初のリポジトリ
 
-この文書一式を新規repositoryへ配置し、[START_DEVELOPMENT](../START_DEVELOPMENT.md)と[AGENTS](../AGENTS.md)を入口にします。既存HomeRunのgit履歴、ソース、アセット、設定をコピーしません。製品名はRunner Dock、内部識別子は`runnerdock`です([ADR-015](17_ADR.md))。表示名は内部識別子から分離し、変更しやすくします。
+この文書一式を新規repositoryへ配置し、[START_DEVELOPMENT](../START_DEVELOPMENT.md)と[AGENTS](../AGENTS.md)を入口にします。既存HomeRunのgit履歴、ソース、アセット、設定をコピーしません。製品名はRunner Dockです。内部識別子は`runnerdock`を決定案とします([ADR-015](17_ADR.md))。表示名は内部識別子から分離し、変更しやすくします。
 
 初期構成は次を提案します。空のcrateを大量に作る必要はなく、LF-001ではcore/protocol/agent/guest/desktopの最小構成を優先します。
 
