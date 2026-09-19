@@ -37,6 +37,8 @@ User tokenの既定期限やrefresh tokenの期限はレスポンスを優先し
 
 MVPのselectorには対象repo限定・Administration readのfine-grained PATを利用者が設定する手順を提供します。期限、更新方法、削除方法を表示します。登録・削除用のwrite tokenを入れさせません。
 
+fine-grained PATには有効期限があります。設定可能な上限は実装時点の公式資料で確認し、定数として埋め込みません。期限切れ・削除後のselectorは`missing-monitor-token`または`api-http-401`としてhostedを選び続けるため、hosted許可時は気付かないまま課金対象の実行が続き得ます。対策として、AgentはCredentialRefと同様にselector用PATの期限(利用者が入力した値)を記録して事前に通知し、生成Workflowはhosted選択の理由をwarning注釈として実行サマリーへ出します。
+
 ## 4. 必要権限
 
 | 操作 | repo-level | org-level |
@@ -70,7 +72,7 @@ Organization対応では`/orgs/{org}/actions/...`へ明示的に切り替えま�
 
 一覧は`Link`の`next`をたどり、1ページ目だけで存在しないと判定しません。次URLのoriginを検証し、別hostへAuthorizationを転送しません。redirectはAPI originと認証ヘッダーの扱いを確認して追従します。[S23](19_SOURCES.md#s23)[S24](19_SOURCES.md#s24)
 
-読取はETagを利用可能なら利用し、アカウント単位で重複要求をまとめます。既定pollは30秒、GUI非表示では60秒を初期値とし、起動直後だけ短い限定再確認を許可します。`Retry-After`、残量、reset、poll intervalが返れば優先します。[S23](19_SOURCES.md#s23)
+読取はETagを利用可能なら利用し、アカウント単位で重複要求をまとめます。poll間隔とstale閾値の既定値は[05 §4](05_DOMAIN_STATE.md)の表に従い、起動直後だけ短い限定再確認を許可します。`Retry-After`、残量、reset、poll intervalが返れば優先します。[S23](19_SOURCES.md#s23)
 
 ## 7. 障害の扱い
 

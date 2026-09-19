@@ -129,3 +129,25 @@
 **決定:** persistent Runnerの安全な運用支援をMVPとし、ephemeral登録・環境再作成・ホスト隔離は別機能とする。[S01](19_SOURCES.md#s01)[S07](19_SOURCES.md#s07)[S19](19_SOURCES.md#s19)
 
 **帰結:** ephemeralフラグで一度のjob後に登録が消えても、ホストへの変更が元に戻るとは扱わない。Scale Set Client等を導入する場合も、Go側の別プロセス統合と運用コストを評価する。
+
+## ADR-014: jobから管理資格情報・管理IPCへの到達を減らす
+
+**状態:** Proposed / **採用ゲート:** G4 / **検証:** LF-005/006/012
+
+**背景:** ADR-003によりAgentとRunnerは同じWindowsユーザーで動く。GitHub Appのuser tokenはAppの権限を引き継ぐため、常時監視に使うtokenもAdministration: writeを持つ。信頼済みrefに混入した依存コードは、同一ユーザーとして資格情報ストアを読み、同一SIDのnamed pipeへ管理要求を送り得る。[S19](19_SOURCES.md#s19)[S27](19_SOURCES.md#s27)
+
+**決定案:** MVPでは次を組み合わせる。(1) 管理IPCの破壊的method(`runner.applyRemove`、`node.forceStop`、`credential.import`、`settings.apply`)は、GUIだけが提示できる対話確認challengeを必須にし、pipe接続だけでは完了させない。(2) write権限を要する操作の直前にだけ再認証またはtoken取得を行い、長期保存するのはrefresh不要で足りる最小の資格情報に限る方式をLF-006/012で検証する。(3) 常時監視をread専用資格情報へ分離できるかを同タスクで確認する。
+
+**比較:** Runnerを別のWindowsユーザーで動かす方式は境界として最も明確だが、初回に管理者権限でのユーザー作成、WSLのユーザー文脈、プロファイル分離が必要になり、ADR-003の非昇格方針と衝突する。MVP後の「専用アカウントモード」として別ADRで扱う。何も対策せず注意書きだけにする案は、管理tokenの影響範囲(repo管理権限)に対して弱い。
+
+**帰結:** (1)〜(3)でも同一ユーザーの敵対的コードからの完全な防御にはならない。残存リスクを[09](09_SECURITY.md)のTH-12と利用上の注意に記載する。検証の結果(2)(3)が成立しない場合は、write tokenを常駐させる前提でリスク説明を強め、専用アカウントモードの優先度を上げる。
+
+## ADR-015: 永続する識別子を表示名から分離する
+
+**状態:** Proposed / **決定期限:** LF-007/008で実Runnerを登録する前
+
+**背景:** 製品名は仮称だが、custom label、Runner名prefix、`%LOCALAPPDATA%`配下のdirectory、pipe名、WSL内path、資格情報ストアのkeyは、実Runnerの登録後にGitHub側・利用者のWorkflow・ローカル環境へ残り、改名時に移行が必要になる。
+
+**決定案:** 表示名とは独立した内部識別子を1つ定め、上記すべての永続名はその識別子から導出する。表示名・window title・文書上の名称だけを後から変更可能とする。Mock段階(LF-001/002)は仮称のままでよいが、識別子は定数1か所に集約する。
+
+**帰結:** 内部識別子は公開名称の確定を待たずに決められる。既存名との衝突確認は識別子についても行う。識別子を変更する場合はlabel・path・credential keyの移行手順を伴う。

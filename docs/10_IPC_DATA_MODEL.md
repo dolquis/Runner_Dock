@@ -54,7 +54,9 @@ Guestのstdoutにはこのプロトコルだけを出します。Guestの診断�
   "payload": {
     "runnerId": "runner-linux",
     "local": "running",
-    "remote": "unknown",
+    "remotePresence": "registered",
+    "remoteAvailability": "unknown",
+    "remoteFreshness": "stale",
     "remoteErrorCode": "AUTH_EXPIRED",
     "verifiedAt": null,
     "desired": "running"
@@ -136,7 +138,8 @@ CREATE TABLE runners (
     install_path TEXT NOT NULL,
     desired_state TEXT NOT NULL CHECK (desired_state IN ('running','stopped','removed')),
     revision INTEGER NOT NULL DEFAULT 1,
-    UNIQUE (scope_id, remote_runner_id)
+    UNIQUE (scope_id, remote_runner_id),
+    UNIQUE (backend_id, install_path)
 );
 CREATE TABLE operations (
     id TEXT PRIMARY KEY,
@@ -157,6 +160,15 @@ CREATE TABLE managed_resources (
     operation_id TEXT REFERENCES operations(id),
     state TEXT NOT NULL
 );
+CREATE TABLE routing_policies (
+    id TEXT PRIMARY KEY,
+    scope_id TEXT NOT NULL REFERENCES scopes(id),
+    trusted_refs_json TEXT NOT NULL,
+    allow_hosted INTEGER NOT NULL CHECK (allow_hosted IN (0,1)),
+    unavailable_action TEXT NOT NULL CHECK (unavailable_action IN ('fail','wait')),
+    revision INTEGER NOT NULL DEFAULT 1,
+    generated_template_sha256 TEXT
+);
 CREATE TABLE audit_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     recorded_at TEXT NOT NULL,
@@ -166,6 +178,8 @@ CREATE TABLE audit_events (
     details_json TEXT NOT NULL
 );
 ```
+
+`remote_runner_id`は登録完了まで`NULL`であり、SQLiteのUNIQUEは`NULL`同士を重複と扱いません。登録前Runnerの重複は`(backend_id, install_path)`とOperationの`request_id`で防ぎます。`routing_policies`は[05](05_DOMAIN_STATE.md)のRoutingPolicyに対応し、`allow_hosted=0`のときの挙動を`unavailable_action`で持ちます。
 
 `config_json`等には別途version付きSchemaを適用します。JSON列があることは任意設定や任意コマンドを許可することを意味しません。
 

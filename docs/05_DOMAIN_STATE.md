@@ -54,7 +54,15 @@ ObservationFreshness:
 | 観測なし、stale、未知enum | Unknown | 最後の既知値を副表示する |
 | Windows Ready、WSL Error | Partial | Node全体を成功にしない |
 
-鮮度既定値はLocal 10秒、Remote 90秒とします。これは製品の設計値でありGitHubのSLAではありません。304で状態が不変と確認できた場合は`verified_at`を更新できます。
+**観測間隔**は次の観測を試みる周期、**stale閾値**は最後に成功した観測(`verified_at`)からこの時間を超えたら`Stale`と表示する境界です。両者を同じ「鮮度」の数値として扱いません。既定値はこの表を正とし、他文書はここを参照します。
+
+| 対象 | 観測間隔 | stale閾値 |
+|---|---|---|
+| Local(プロセス・Guest) | 3秒 | 10秒 |
+| Remote(GitHub API)、GUI表示中 | 30秒 | 90秒 |
+| Remote(GitHub API)、GUI非表示 | 60秒 | 180秒 |
+
+stale閾値は観測間隔のおよそ3倍とし、1回の観測失敗だけで`Stale`へ落とさない方針です。`Retry-After`等で観測間隔が延びた場合、閾値は延ばさず`Stale`と理由(rate limit等)を表示します。これらは製品の設計値でありGitHubのSLAではありません。304で状態が不変と確認できた場合は`verified_at`を更新できます。
 
 ## 5. 起動操作の遷移
 
