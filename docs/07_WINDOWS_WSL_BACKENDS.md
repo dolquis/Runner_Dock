@@ -26,14 +26,14 @@ WSL CLIの一覧出力はローカライズ、UTF-16/NUL、空白を含む名前
 
 ```text
 Windows:
-  %LOCALAPPDATA%\LocalForge\state\localforge.db
-  %LOCALAPPDATA%\LocalForge\runners\<runner-id>\
-  %LOCALAPPDATA%\LocalForge\cache\<version>-<arch>\
-  %LOCALAPPDATA%\LocalForge\logs\
+  %LOCALAPPDATA%\RunnerDock\state\runnerdock.db
+  %LOCALAPPDATA%\RunnerDock\runners\<runner-id>\
+  %LOCALAPPDATA%\RunnerDock\cache\<version>-<arch>\
+  %LOCALAPPDATA%\RunnerDock\logs\
 
 WSL:
-  /home/<ci-user>/.local/share/localforge/runners/<runner-id>/
-  /home/<ci-user>/.local/share/localforge/bin/localforge-guest
+  /home/<ci-user>/.local/share/runnerdock/runners/<runner-id>/
+  /home/<ci-user>/.local/share/runnerdock/bin/runnerdock-guest
 ```
 
 Ubuntu Runnerの`_work`を既定で`/mnt/c`へ置きません。WindowsとLinuxのファイル権限・改行・path・I/O特性を混同しないための製品方針です。ユーザーによる保存先指定には診断と警告を付けます。

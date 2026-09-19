@@ -1,6 +1,6 @@
 # 開発エージェント向け指示
 
-対象はLocalForge（仮称）。WindowsネイティブとWSL2 UbuntuのGitHub Actions Runnerを統合管理する、新規独自実装です。
+対象はRunner Dock。WindowsネイティブとWSL2 UbuntuのGitHub Actions Runnerを統合管理する、新規独自実装です。
 
 ## 着手時
 

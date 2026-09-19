@@ -35,7 +35,7 @@ MVPの既定対象は承認済みprivate repoの保護されたmainへのpushと
 以下は構成確認用のテンプレートです。`OWNER/REPO`、`12345`、`67890`、custom labelは**説明用の値**であり、実装時は検証済み設定から生成します。hosted許可を選んだ場合の例で、APIエラー時もその同意に基づいてhostedを選びます。
 
 ```yaml
-name: LocalForge routing smoke test
+name: Runner Dock routing smoke test
 on:
   push:
     branches: [main]
@@ -81,10 +81,10 @@ jobs:
           repo = os.environ["TARGET_REPO"]
           targets = [
               ("windows", os.environ["WINDOWS_RUNNER_ID"],
-               ["self-hosted", "Windows", "X64", "localforge-home-windows"],
+               ["self-hosted", "Windows", "X64", "runnerdock-home-windows"],
                ["windows-2022"]),
               ("linux", os.environ["LINUX_RUNNER_ID"],
-               ["self-hosted", "Linux", "X64", "localforge-home-ubuntu"],
+               ["self-hosted", "Linux", "X64", "runnerdock-home-ubuntu"],
                ["ubuntu-24.04"]),
           ]
 
@@ -104,7 +104,7 @@ jobs:
                           "Accept": "application/vnd.github+json",
                           "Authorization": f"Bearer {token}",
                           "X-GitHub-Api-Version": "2026-03-10",
-                          "User-Agent": "LocalForge-Workflow-Selector",
+                          "User-Agent": "RunnerDock-Workflow-Selector",
                       },
                   )
                   try:
@@ -136,7 +136,7 @@ jobs:
                   output.write(f"{key}={json.dumps(selected, separators=(',', ':'))}\n")
               print(f"{key}: {reason}")
               if selected is hosted_labels:
-                  print(f"::warning title=LocalForge routing::{key}: hosted selected ({reason})")
+                  print(f"::warning title=Runner Dock routing::{key}: hosted selected ({reason})")
           PYTHON
 
   windows:

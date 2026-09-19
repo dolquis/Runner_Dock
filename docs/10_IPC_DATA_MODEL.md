@@ -6,7 +6,7 @@
 
 Renderer→Tauriは限定command/event、Desktop Rust Bridge→AgentはWindows named pipe、Agent→WSL Guestは継続するstdioフレームを使います。ローカルWebサーバーの公開を標準構成にしません。
 
-pipeの識別名は例として`\\.\pipe\localforge.<sid-hash>.v1`を用います。名前は認証の代わりではありません。DACL、所有SID、remote client拒否は[セキュリティ](09_SECURITY.md)の要件です。[S26](19_SOURCES.md#s26)
+pipeの識別名は例として`\\.\pipe\runnerdock.<sid-hash>.v1`を用います。名前は認証の代わりではありません。DACL、所有SID、remote client拒否は[セキュリティ](09_SECURITY.md)の要件です。[S26](19_SOURCES.md#s26)
 
 ## 2. フレーム形式
 

@@ -60,8 +60,8 @@ HomeRunのLICENSEはMITです。ただし、本方針はコード取り込みで
 
 | 項目 | 既定の扱い | 決定する時点 |
 |---|---|---|
-| 製品名・repo名 | LocalForgeは仮称 | 公開前。商標・既存名を別途確認 |
-| 永続する内部識別子(label、path、pipe名、credential key) | 未決定。仮称から導出しない | LF-007/008の実Runner登録前(ADR-015) |
+| 製品名・repo名 | Runner Dock(2026-09-20決定)。repoは`Runner_Dock` | 商標・既存名の確認は公開前 |
+| 永続する内部識別子(label、path、pipe名、credential key) | `runnerdock`を決定案とする(ADR-015) | LF-007/008の実Runner登録前(ADR-015) |
 | jobと管理資格情報・管理IPCの境界 | ADR-014の決定案 | LF-005/006/012の検証後、G4で確定 |
 | 公開ライセンス | 未決定 | ソース公開前 |
 | GitHub App登録所有者 | 未作成・未決定 | LF-006の認証PoC前 |

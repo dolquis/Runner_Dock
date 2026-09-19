@@ -146,8 +146,8 @@
 
 **状態:** Proposed / **決定期限:** LF-007/008で実Runnerを登録する前
 
-**背景:** 製品名は仮称だが、custom label、Runner名prefix、`%LOCALAPPDATA%`配下のdirectory、pipe名、WSL内path、資格情報ストアのkeyは、実Runnerの登録後にGitHub側・利用者のWorkflow・ローカル環境へ残り、改名時に移行が必要になる。
+**背景:** 製品名はRunner Dockに決定したが、商標確認等で表示名が変わる可能性は残る。一方、custom label、Runner名prefix、`%LOCALAPPDATA%`配下のdirectory、pipe名、WSL内path、資格情報ストアのkeyは、実Runnerの登録後にGitHub側・利用者のWorkflow・ローカル環境へ残り、改名時に移行が必要になる。
 
-**決定案:** 表示名とは独立した内部識別子を1つ定め、上記すべての永続名はその識別子から導出する。表示名・window title・文書上の名称だけを後から変更可能とする。Mock段階(LF-001/002)は仮称のままでよいが、識別子は定数1か所に集約する。
+**決定案:** 表示名とは独立した内部識別子を`runnerdock`(小文字・区切りなし。Windowsのdirectory名は`RunnerDock`)と定め、上記すべての永続名はその識別子から導出する。表示名・window title・文書上の名称だけを後から変更可能とする。識別子は定数1か所に集約する。
 
 **帰結:** 内部識別子は公開名称の確定を待たずに決められる。既存名との衝突確認は識別子についても行う。識別子を変更する場合はlabel・path・credential keyの移行手順を伴う。
