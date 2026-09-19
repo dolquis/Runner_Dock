@@ -1,0 +1,12 @@
+version: 2
+
+# 実装が入るまでは GitHub Actions だけを対象にする。Cargo と npm は
+# Cargo.toml / package.json が入った PR で同じ ecosystem を足す。
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"

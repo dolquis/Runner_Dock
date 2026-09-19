@@ -13,7 +13,9 @@ Windows PC 1台を、WindowsネイティブとWSL2 UbuntuのGitHub Actions実行
 3. [アーキテクチャ](docs/03_ARCHITECTURE.md)、[セキュリティ](docs/09_SECURITY.md)、[設計判断](docs/17_ADR.md): 実装が守る境界。
 4. [バックログ](docs/14_BACKLOG.md): 依存関係付きの作業単位。
 
-AIコーディングエージェントには、リポジトリ直下に置く [AGENTS.md](AGENTS.md) と [START_DEVELOPMENT.md](START_DEVELOPMENT.md) を渡してください。文書のみの状態で、記載された未実装コマンドが動くとは扱わないでください。
+AIコーディングエージェントは、リポジトリ直下の [AGENTS.md](AGENTS.md) を常時読みます。Claude Code は [CLAUDE.md](CLAUDE.md) 経由で同じ内容を読み、固有事項を追加で受け取ります。最初に取り組む範囲は [START_DEVELOPMENT.md](START_DEVELOPMENT.md) にあります。文書のみの状態で、記載された未実装コマンドが動くとは扱わないでください。
+
+エージェント向けの Skill、サブエージェント、文書検査器、Linear 運用規約の所在は [.claude/skills/MANIFEST.md](.claude/skills/MANIFEST.md) と [docs/README.md](docs/README.md) にまとめてあります。
 
 ## 文書一覧
 
@@ -40,6 +42,8 @@ AIコーディングエージェントには、リポジトリ直下に置く [A
 | [19 根拠資料](docs/19_SOURCES.md) | 一次資料のURL、確認日、用途 |
 | [20 追跡表・文書検証](docs/20_TRACEABILITY.md) | 要件→タスク→テストと文書整合性検査 |
 | [実装タスク雛形](templates/IMPLEMENTATION_TASK.md) | 人間・AI共通の作業指示テンプレート |
+| [Human Gate](docs/HUMAN_GATES.md) | AI 単独で確定しない人間判断の登録簿 |
+| [Linear 運用規約](docs/linear-conventions.md) | 共有コアと Runner Dock の Project Delta |
 
 ## 採用方針の要約
 
