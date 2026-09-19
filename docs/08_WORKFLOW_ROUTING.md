@@ -6,7 +6,7 @@
 
 製品内では「ローカル優先・事前選択」と呼びます。オンライン・空き状態を調べてから、後続jobの`runs-on`を決めます。GitHubの実行開始後に別OS環境へジョブを移す機能ではありません。
 
-GitHubではRunnerが見つからないjobはキューに残り得ます。配列の`runs-on`は代替候補の列挙ではなく、label条件の組合せです。60秒の再キューや24時間の上限を「hostedへ切替わる機能」と解釈しません。[S01](19_SOURCES.md#s01)[S22](19_SOURCES.md#s22)
+GitHubではRunnerが見つからないjobはキューに残り得ます。配列の`runs-on`は代替候補の列挙ではなく、label条件の組合せです。60秒の再キューや24時間の上限を「hostedへ切替わる機能」と解釈しません。[S01](19_SOURCES.md#s01)[S22](19_SOURCES.md#s22)[S34](19_SOURCES.md#s34)
 
 ## 2. 信頼判定を可用性判定より先に行う
 
@@ -26,7 +26,7 @@ MVPの既定対象は承認済みprivate repoの保護されたmainへのpushと
 
 `allow_hosted=true`は利用者が適用前に明示同意した場合だけ生成します。selector自身もhosted上で実行されるため、ローカルビルドになった場合でもhosted利用が完全にゼロとは限りません。[S20](19_SOURCES.md#s20)
 
-`local_only`では利用不能時に長時間待たせるか、失敗させるかを別のpolicyとして指定します。MVP推奨は明示失敗です。節約設定なのにAPI障害で有料Runnerへ黙って切替えることを禁止します。
+`local_only`では利用不能時に長時間待たせるか、失敗させるかを別のpolicyとして指定します。MVP推奨は明示失敗です。節約設定なのにAPI障害で有料Runnerへ黙って切替えることを禁止します。§4の掲載例はhosted許可時のものです。`local_only`用テンプレートは、利用不能・不明時にselector jobを理由付きで失敗させ、outputsにhosted labelの既定値を持たない別テンプレートとしてLF-014で作成・試験します。
 
 ## 4. テンプレートが成立する条件
 
@@ -35,7 +35,7 @@ MVPの既定対象は承認済みprivate repoの保護されたmainへのpushと
 以下は構成確認用のテンプレートです。`OWNER/REPO`、`12345`、`67890`、custom labelは**説明用の値**であり、実装時は検証済み設定から生成します。hosted許可を選んだ場合の例で、APIエラー時もその同意に基づいてhostedを選びます。
 
 ```yaml
-name: LocalForge routing smoke test
+name: Runner Dock routing smoke test
 on:
   push:
     branches: [main]
@@ -81,10 +81,10 @@ jobs:
           repo = os.environ["TARGET_REPO"]
           targets = [
               ("windows", os.environ["WINDOWS_RUNNER_ID"],
-               ["self-hosted", "Windows", "X64", "localforge-home-windows"],
+               ["self-hosted", "Windows", "X64", "runnerdock-home-windows"],
                ["windows-2022"]),
               ("linux", os.environ["LINUX_RUNNER_ID"],
-               ["self-hosted", "Linux", "X64", "localforge-home-ubuntu"],
+               ["self-hosted", "Linux", "X64", "runnerdock-home-ubuntu"],
                ["ubuntu-24.04"]),
           ]
 
@@ -104,7 +104,7 @@ jobs:
                           "Accept": "application/vnd.github+json",
                           "Authorization": f"Bearer {token}",
                           "X-GitHub-Api-Version": "2026-03-10",
-                          "User-Agent": "LocalForge-Workflow-Selector",
+                          "User-Agent": "RunnerDock-Workflow-Selector",
                       },
                   )
                   try:
@@ -135,6 +135,8 @@ jobs:
               with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
                   output.write(f"{key}={json.dumps(selected, separators=(',', ':'))}\n")
               print(f"{key}: {reason}")
+              if selected is hosted_labels:
+                  print(f"::warning title=Runner Dock routing::{key}: hosted selected ({reason})")
           PYTHON
 
   windows:
@@ -155,6 +157,8 @@ jobs:
         shell: bash
         run: printf 'Runner=%s OS=%s\n' "$RUNNER_NAME" "$RUNNER_OS"
 ```
+
+信頼条件を満たすイベントでhostedを選んだ場合は、理由をwarning注釈として実行サマリーへ出します。PR等でselector stepがskipされた場合は注釈を出しません。
 
 このサンプルはcheckoutやビルドを行いません。既存ビルドの移植では、固定commit SHAを使うActions、`setup-*`、shell、architecture、toolchain、cache keyを明示して比較します。`windows-2022`/`ubuntu-24.04`は環境差を抑える例であり、最新hosted labelの主張ではありません。
 

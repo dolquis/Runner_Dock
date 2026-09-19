@@ -6,7 +6,7 @@
 
 Renderer→Tauriは限定command/event、Desktop Rust Bridge→AgentはWindows named pipe、Agent→WSL Guestは継続するstdioフレームを使います。ローカルWebサーバーの公開を標準構成にしません。
 
-pipeの識別名は例として`\\.\pipe\localforge.<sid-hash>.v1`を用います。名前は認証の代わりではありません。DACL、所有SID、remote client拒否は[セキュリティ](09_SECURITY.md)の要件です。[S26](19_SOURCES.md#s26)
+pipeの識別名は例として`\\.\pipe\runnerdock.<sid-hash>.v1`を用います。名前は認証の代わりではありません。DACL、所有SID、remote client拒否は[セキュリティ](09_SECURITY.md)の要件です。[S26](19_SOURCES.md#s26)
 
 ## 2. フレーム形式
 
@@ -54,9 +54,11 @@ Guestのstdoutにはこのプロトコルだけを出します。Guestの診断�
   "payload": {
     "runnerId": "runner-linux",
     "local": "running",
-    "remote": "unknown",
+    "remotePresence": "registered",
+    "remoteAvailability": "unknown",
+    "remoteFreshness": "stale",
     "remoteErrorCode": "AUTH_EXPIRED",
-    "verifiedAt": null,
+    "verifiedAt": "2026-09-19T03:12:45Z",
     "desired": "running"
   }
 }
@@ -134,9 +136,11 @@ CREATE TABLE runners (
     display_name TEXT NOT NULL,
     labels_json TEXT NOT NULL,
     install_path TEXT NOT NULL,
+    install_path_key TEXT NOT NULL,
     desired_state TEXT NOT NULL CHECK (desired_state IN ('running','stopped','removed')),
     revision INTEGER NOT NULL DEFAULT 1,
-    UNIQUE (scope_id, remote_runner_id)
+    UNIQUE (scope_id, remote_runner_id),
+    UNIQUE (backend_id, install_path_key)
 );
 CREATE TABLE operations (
     id TEXT PRIMARY KEY,
@@ -157,6 +161,15 @@ CREATE TABLE managed_resources (
     operation_id TEXT REFERENCES operations(id),
     state TEXT NOT NULL
 );
+CREATE TABLE routing_policies (
+    id TEXT PRIMARY KEY,
+    scope_id TEXT NOT NULL REFERENCES scopes(id),
+    trusted_refs_json TEXT NOT NULL,
+    allow_hosted INTEGER NOT NULL CHECK (allow_hosted IN (0,1)),
+    unavailable_action TEXT NOT NULL CHECK (unavailable_action IN ('fail','wait')),
+    revision INTEGER NOT NULL DEFAULT 1,
+    generated_template_sha256 TEXT
+);
 CREATE TABLE audit_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     recorded_at TEXT NOT NULL,
@@ -166,6 +179,8 @@ CREATE TABLE audit_events (
     details_json TEXT NOT NULL
 );
 ```
+
+`remote_runner_id`は登録完了まで`NULL`であり、SQLiteのUNIQUEは`NULL`同士を重複と扱いません。登録前Runnerの重複は`(backend_id, install_path_key)`とOperationの`request_id`で防ぎます。`install_path`は表示用の原文、`install_path_key`はBackendごとに正規化した比較用keyです。Windowsではjunction・symlink・8.3短縮名・相対要素を解決した最終pathを取得して大文字小文字を畳み込み、WSLではdistro内の`realpath`結果を使います。正規化はAgentが行い、解決できないpathは登録を拒否します。表記違いの同一directoryを別Runnerとして受け入れないことをTC-015/018で確認します。`routing_policies`は[05](05_DOMAIN_STATE.md)のRoutingPolicyに対応し、`allow_hosted=0`のときの挙動を`unavailable_action`で持ちます。
 
 `config_json`等には別途version付きSchemaを適用します。JSON列があることは任意設定や任意コマンドを許可することを意味しません。
 

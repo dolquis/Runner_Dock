@@ -26,7 +26,7 @@ GitHub管理tokenとselector用read tokenは別の設定です。利用者に理
 ## 3. ホーム画面の情報構造
 
 ```text
-LocalForge                     PC: DESKTOP-XXXX
+Runner Dock                    PC: DESKTOP-XXXX
 Node: 部分稼働                 [Nodeを起動] [停止を要求]
 
 Windows Runner
