@@ -3,6 +3,17 @@
 //! この crate が契約の正典で、JSON Schema と TypeScript 型はここから生成する
 //! （`docs/04_TECHNOLOGY_STACK.md` §4）。OS 操作、HTTP、Tauri には依存しない。
 //! 秘密本体を通常 DTO として追加しない（`docs/03_ARCHITECTURE.md` §6）。
+//!
+//! # `core` との責務分担
+//!
+//! ワイヤーへ出る型はドメイン概念であってもこの crate が持ち、`crates/core` は
+//! それを `use` する。`BackendKind` や `DesiredState` のように、ドメインの語彙で
+//! あると同時に IPC と SQLite の CHECK 制約にも現れる型を両側で定義すると、
+//! 同じ概念が 2 つになり変換と乖離が生まれる。LF-002 はその乖離を防ぐために
+//! 契約を 1 か所へ寄せるタスクなので、重複より片方向の依存を採る。
+//!
+//! `core` 側に置くのは、ワイヤーへ出ない判断の型（観測の解釈結果、鮮度の計算、
+//! Operation の内部記録など）に限る。
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
