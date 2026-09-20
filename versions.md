@@ -11,7 +11,7 @@ Runner Dock のツールチェインと主要依存の固定値である。`docs
 | 確認日 | 2026-09-20 |
 | OS | Windows 11 Pro 10.0.26200 (x86_64) |
 | host triple | `x86_64-pc-windows-msvc` |
-| Linux 側 | このリポジトリでは確認していない。GitHub-hosted Linux での確認は CI (`.github/workflows/build.yml`) で行う |
+| Linux 側 | WSL2 Ubuntu で `runnerdock-core` / `runnerdock-protocol` / `runnerdock-cli` の単体試験を実行（`x86_64-unknown-linux-gnu`、同じ `rust-toolchain.toml`）。GitHub-hosted Linux での確認は CI (`.github/workflows/build.yml`) で行う |
 
 WebView2 と MSVC ビルドツールは OS 側の前提であり、このファイルでは固定しない。導入手順は `docs/15_DEVELOPER_GUIDE.md` §2 にある。
 
