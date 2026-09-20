@@ -1,0 +1,53 @@
+/* design token は CSS variables を基本にする（docs/04_TECHNOLOGY_STACK.md §3）。 */
+:root {
+  --rd-bg: #101521;
+  --rd-surface: #1b2233;
+  --rd-text: #e8ecf5;
+  --rd-muted: #9aa6bf;
+  --rd-accent: #5ec8d8;
+
+  color-scheme: dark light;
+  font-family: system-ui, "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  background: var(--rd-bg);
+  color: var(--rd-text);
+}
+
+.app {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+
+h1 {
+  margin: 0 0 0.5rem;
+  color: var(--rd-accent);
+  font-size: 1.75rem;
+}
+
+.lead {
+  margin: 0 0 2rem;
+  color: var(--rd-muted);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.5rem 1.5rem;
+  margin: 0;
+  padding: 1.25rem;
+  background: var(--rd-surface);
+  border-radius: 0.5rem;
+}
+
+.facts dt {
+  color: var(--rd-muted);
+}
+
+.facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

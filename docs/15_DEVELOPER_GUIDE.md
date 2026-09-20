@@ -1,6 +1,6 @@
 # 15. 開発者ガイド
 
-**対象:** 人間の開発者・AIコーディングエージェント / **状態:** 初期リポジトリ作成前
+**対象:** 人間の開発者・AIコーディングエージェント / **実測済みコマンド:** [README](../README.md)「開発コマンド」
 
 ## 1. 最初のリポジトリ
 
@@ -52,18 +52,18 @@ wsl.exe --list --verbose
 
 ## 4. 初期化後に定義する開発コマンド
 
-以下は**LF-001で作成するコマンド契約**です。現時点の文書パッケージで実行可能なアプリはありません。package scriptの実体を作成した後にREADMEへ実測済み手順として移します。
+以下は**LF-001で定義したコマンド契約**です。実体があり実行できるものは[README](../README.md)「開発コマンド」に実測済み手順として載せます。実体を持たないものは非0終了し、どのタスクで実装するかを出力します。exit 0のダミーを置かず、検査が通ったことと区別します。
 
-| コマンド案 | 実装する動作 |
-|---|---|
-| `pnpm dev:mock` | 実GitHub/WSLへ接続せずUIを表示 |
-| `pnpm desktop:dev` | Tauri UIを起動しuser Agentへ接続 |
-| `pnpm lint` | TypeScript、React、禁止APIの検査 |
-| `pnpm test` | UI/Workflowの単体・fixture試験 |
-| `pnpm contracts:check` | Rust由来の契約生成物との差分検査 |
-| `pnpm e2e:mock` | テスト専用Tauri buildのUI E2E |
+| コマンド | 実装する動作 | 実体 |
+|---|---|---|
+| `pnpm dev:mock` | 実GitHub/WSLへ接続せずUIを表示 | LF-001 |
+| `pnpm desktop:dev` | Tauri UIを起動しuser Agentへ接続 | LF-001でUI起動まで。Agent接続はLF-005 |
+| `pnpm lint` | TypeScript、React、禁止APIの検査 | LF-001 |
+| `pnpm test` | UI/Workflowの単体・fixture試験 | LF-001 |
+| `pnpm contracts:check` | Rust由来の契約生成物との差分検査 | LF-002 |
+| `pnpm e2e:mock` | テスト専用Tauri buildのUI E2E | LF-010 |
 
-Cargo側はworkspace完成後、`cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --locked`を基準にします。Windows専用crateはplatform cfgで囲み、Linux CIからWindows実装を検証したと誤認しないようjobを分けます。
+Cargo側は`cargo fmt --all -- --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace --locked`を基準にします。Windows専用crateはplatform cfgで囲み、Linux CIからWindows実装を検証したと誤認しないようjobを分けます。Tauriのsrc-tauri crateはLinux GUI依存を要するため、Linux jobでは`--exclude runnerdock-desktop`を付け、Windows jobでビルドします。
 
 ## 5. コーディング規約
 

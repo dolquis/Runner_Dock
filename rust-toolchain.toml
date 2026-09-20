@@ -1,0 +1,9 @@
+# Rust toolchain の固定（NFR-003 / ADR-011）。
+# 値は「確認値」ではなく「このリポジトリで実ビルドした導入値」である。
+# 由来と確認日は versions.md を参照する。nightly / RC は承認済み ADR がある
+# 場合だけ使う。
+[toolchain]
+channel = "1.98.1"
+components = ["rustfmt", "clippy"]
+targets = ["x86_64-pc-windows-msvc"]
+profile = "minimal"

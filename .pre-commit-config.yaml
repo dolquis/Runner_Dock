@@ -23,6 +23,8 @@ repos:
       - id: check-added-large-files
         args: ["--maxkb=1024"]
       - id: check-yaml
+        # pnpm-lock.yaml は複数ドキュメントを含むため単一ドキュメント前提にしない。
+        args: ["--allow-multiple-documents"]
       - id: check-json
       - id: check-toml
 
