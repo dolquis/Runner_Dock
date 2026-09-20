@@ -264,3 +264,109 @@ pub struct HandshakeResult {
     pub agent_generation: crate::ids::AgentGeneration,
     pub capabilities: Vec<String>,
 }
+
+/// handshake が不一致だった理由。
+///
+/// 「接続できません」へ丸めない。本体・Agent・Guest は同じ互換表で管理するので
+/// （`docs/03_ARCHITECTURE.md` §8）、どちら側を更新すべきかを利用者が判断できる
+/// 必要がある。相手が古いのか新しいのかを分け、双方の major を payload に載せる。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+// 判別子は他の enum と同じ snake_case、フィールドは他の DTO と同じ camelCase。
+#[serde(
+    tag = "reason",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum HandshakeRejection {
+    /// 相手の major が古い。相手側の更新が要る。
+    PeerTooOld {
+        peer_protocol_major: u32,
+        expected_protocol_major: u32,
+    },
+    /// 相手の major が新しい。こちら側の更新が要る。
+    PeerTooNew {
+        peer_protocol_major: u32,
+        expected_protocol_major: u32,
+    },
+}
+
+impl HandshakeRejection {
+    /// 相手が申告した major を、この実装が受け入れられるか判定する。
+    ///
+    /// # Errors
+    ///
+    /// 一致しなければ、どちら側を更新すべきかを表す [`HandshakeRejection`] を返す。
+    pub const fn evaluate(peer_protocol_major: u32) -> Result<(), Self> {
+        let expected_protocol_major = crate::PROTOCOL_MAJOR;
+        if peer_protocol_major == expected_protocol_major {
+            return Ok(());
+        }
+        if peer_protocol_major < expected_protocol_major {
+            return Err(Self::PeerTooOld {
+                peer_protocol_major,
+                expected_protocol_major,
+            });
+        }
+        Err(Self::PeerTooNew {
+            peer_protocol_major,
+            expected_protocol_major,
+        })
+    }
+
+    /// 更新すべきなのが相手側かどうか。UI の案内を分けるのに使う。
+    #[must_use]
+    pub const fn peer_must_update(self) -> bool {
+        matches!(self, Self::PeerTooOld { .. })
+    }
+}
+
+#[cfg(test)]
+mod handshake_tests {
+    use super::HandshakeRejection;
+    use serde_json::json;
+
+    #[test]
+    fn a_matching_major_is_accepted() {
+        assert_eq!(HandshakeRejection::evaluate(crate::PROTOCOL_MAJOR), Ok(()));
+    }
+
+    #[test]
+    fn an_older_peer_is_told_to_update_itself() {
+        let rejection = HandshakeRejection::evaluate(crate::PROTOCOL_MAJOR - 1).unwrap_err();
+
+        assert!(rejection.peer_must_update());
+        assert_eq!(
+            serde_json::to_value(rejection).unwrap(),
+            json!({
+                "reason": "peer_too_old",
+                "peerProtocolMajor": crate::PROTOCOL_MAJOR - 1,
+                "expectedProtocolMajor": crate::PROTOCOL_MAJOR
+            })
+        );
+    }
+
+    #[test]
+    fn a_newer_peer_means_this_side_must_update() {
+        let rejection = HandshakeRejection::evaluate(crate::PROTOCOL_MAJOR + 1).unwrap_err();
+
+        assert!(!rejection.peer_must_update());
+        assert_eq!(
+            serde_json::to_value(rejection).unwrap(),
+            json!({
+                "reason": "peer_too_new",
+                "peerProtocolMajor": crate::PROTOCOL_MAJOR + 1,
+                "expectedProtocolMajor": crate::PROTOCOL_MAJOR
+            })
+        );
+    }
+
+    #[test]
+    fn a_rejection_never_collapses_into_a_single_reason() {
+        // 「接続できません」へ丸めない。どちら側を更新すべきかが残る。
+        let older = HandshakeRejection::evaluate(crate::PROTOCOL_MAJOR - 1).unwrap_err();
+        let newer = HandshakeRejection::evaluate(crate::PROTOCOL_MAJOR + 1).unwrap_err();
+
+        assert_ne!(older, newer);
+        assert_ne!(older.peer_must_update(), newer.peer_must_update());
+    }
+}

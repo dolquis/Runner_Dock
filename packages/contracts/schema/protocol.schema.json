@@ -255,6 +255,61 @@
       ],
       "type": "object"
     },
+    "HandshakeRejection": {
+      "description": "handshake が不一致だった理由。\n\n「接続できません」へ丸めない。本体・Agent・Guest は同じ互換表で管理するので\n（`docs/03_ARCHITECTURE.md` §8）、どちら側を更新すべきかを利用者が判断できる\n必要がある。相手が古いのか新しいのかを分け、双方の major を payload に載せる。",
+      "oneOf": [
+        {
+          "description": "相手の major が古い。相手側の更新が要る。",
+          "properties": {
+            "expectedProtocolMajor": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "peerProtocolMajor": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reason": {
+              "const": "peer_too_old",
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason",
+            "peerProtocolMajor",
+            "expectedProtocolMajor"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "相手の major が新しい。こちら側の更新が要る。",
+          "properties": {
+            "expectedProtocolMajor": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "peerProtocolMajor": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reason": {
+              "const": "peer_too_new",
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason",
+            "peerProtocolMajor",
+            "expectedProtocolMajor"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "HandshakeResult": {
       "description": "handshake の応答。",
       "properties": {

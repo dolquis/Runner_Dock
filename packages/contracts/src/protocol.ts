@@ -106,6 +106,23 @@ export interface ForceStopRequest {
 }
 
 /**
+ * handshake が不一致だった理由。
+ *
+ * 「接続できません」へ丸めない。本体・Agent・Guest は同じ互換表で管理するので
+ * （`docs/03_ARCHITECTURE.md` §8）、どちら側を更新すべきかを利用者が判断できる
+ * 必要がある。相手が古いのか新しいのかを分け、双方の major を payload に載せる。
+ */
+export type HandshakeRejection = {
+  readonly expectedProtocolMajor: number;
+  readonly peerProtocolMajor: number;
+  readonly reason: "peer_too_old";
+} | {
+  readonly expectedProtocolMajor: number;
+  readonly peerProtocolMajor: number;
+  readonly reason: "peer_too_new";
+};
+
+/**
  * handshake の応答。
  */
 export interface HandshakeResult {
