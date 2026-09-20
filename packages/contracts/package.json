@@ -1,0 +1,12 @@
+{
+  "name": "@runnerdock/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT OR Apache-2.0",
+  "description": "crates/protocol から生成したワイヤー契約の TypeScript 型。手で編集しない",
+  "exports": {
+    ".": "./src/protocol.ts",
+    "./schema": "./schema/protocol.schema.json"
+  }
+}

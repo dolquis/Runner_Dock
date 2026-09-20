@@ -1,20 +1,23 @@
+# UI ⇄ Agent ⇄ Guest のワイヤー契約の正
+# （docs/10_IPC_DATA_MODEL.md、docs/15_DEVELOPER_GUIDE.md §1）。
+# 秘密そのものを通常 DTO として置かない。
 [package]
 name = "runnerdock-protocol"
-version = "0.1.0"
-description = "Runner Dock の IPC ワイヤー契約（フレーム、メッセージ、DTO、エラー）"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [dependencies]
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-schemars = { workspace = true }
 
 [lints]
 workspace = true
 
+# JSON Schema と TypeScript を生成する。--check で差分検出（ADR-017）。
 [[bin]]
 name = "contracts-gen"
 path = "src/bin/contracts_gen.rs"

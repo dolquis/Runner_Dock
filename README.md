@@ -4,7 +4,7 @@
 
 Windows PC 1台を、WindowsネイティブとWSL2 UbuntuのGitHub Actions実行環境として構築・運用するための、**新規独自開発プロジェクトの設計基準**です。HomeRunのフォークやコード移植を前提にしません。
 
-> このパッケージは開発用文書です。アプリ、インストーラー、動作確認済みの実装は含みません。採用する設計、確認できた外部仕様、実機検証が必要な仮説を区別しています。製品名はRunner Dockです(2026-09-20決定。商標・既存名との重複確認は製品の配布開始前に行います)。公開ライセンスはMIT OR Apache-2.0です([ADR-016](docs/17_ADR.md))。配布方法は未確定です。タスクIDの接頭辞`LF-`は旧仮称に由来する識別子で、変更しません。
+> このリポジトリは設計文書と、そこから起こした開発用workspaceの骨組みを持ちます。インストーラー、Runnerを実際に管理する機能、配布物は含みません。採用する設計、確認できた外部仕様、実機検証が必要な仮説を区別しています。製品名はRunner Dockです(2026-09-20決定。商標・既存名との重複確認は製品の配布開始前に行います)。公開ライセンスはMIT OR Apache-2.0です([ADR-016](docs/17_ADR.md))。配布方法は未確定です。タスクIDの接頭辞`LF-`は旧仮称に由来する識別子で、変更しません。
 
 ## 最初に読むもの
 
@@ -13,9 +13,36 @@ Windows PC 1台を、WindowsネイティブとWSL2 UbuntuのGitHub Actions実行
 3. [アーキテクチャ](docs/03_ARCHITECTURE.md)、[セキュリティ](docs/09_SECURITY.md)、[設計判断](docs/17_ADR.md): 実装が守る境界。
 4. [バックログ](docs/14_BACKLOG.md): 依存関係付きの作業単位。
 
-AIコーディングエージェントは、リポジトリ直下の [AGENTS.md](AGENTS.md) を常時読みます。Claude Code は [CLAUDE.md](CLAUDE.md) 経由で同じ内容を読み、固有事項を追加で受け取ります。最初に取り組む範囲は [START_DEVELOPMENT.md](START_DEVELOPMENT.md) にあります。文書のみの状態で、記載された未実装コマンドが動くとは扱わないでください。
+AIコーディングエージェントは、リポジトリ直下の [AGENTS.md](AGENTS.md) を常時読みます。Claude Code は [CLAUDE.md](CLAUDE.md) 経由で同じ内容を読み、固有事項を追加で受け取ります。最初に取り組む範囲は [START_DEVELOPMENT.md](START_DEVELOPMENT.md) にあります。動かせるコマンドは下の「開発コマンド」に挙げたものだけです。文書中の構成図やコマンド例が動くとは扱わないでください。
 
 エージェント向けの Skill、サブエージェント、文書検査器、Linear 運用規約の所在は [.claude/skills/MANIFEST.md](.claude/skills/MANIFEST.md) と [docs/README.md](docs/README.md) にまとめてあります。
+
+## 開発コマンド
+
+前提は [.node-version](.node-version)、[rust-toolchain.toml](rust-toolchain.toml)、[package.json](package.json) の `packageManager` が示す版です。導入値の由来は [versions.md](versions.md) にあります。Windows の前提ツールは [開発者ガイド](docs/15_DEVELOPER_GUIDE.md) §2 を参照してください。
+
+```bash
+pnpm install --frozen-lockfile   # JS 依存を lockfile どおりに展開する
+pnpm dev:mock                    # 実 GitHub / WSL へ接続せず UI をブラウザで表示する
+pnpm desktop:dev                 # Tauri の desktop shell を起動する（Windows）
+pnpm lint                        # tsc --noEmit と eslint
+pnpm test                        # UI の単体試験（Vitest）
+pnpm build                       # UI の production build
+```
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+```
+
+`--workspace` は desktop shell の `src-tauri` を含みます。この crate のビルドは `tauri.conf.json` の `frontendDist`（`apps/desktop/dist`）を要求するため、新規 clone では先に `pnpm build` を実行してください。Rust だけを触るときは `-p runnerdock-core -p runnerdock-protocol -p runnerdock-cli -p runnerdock-agent -p runnerdock-guest` のように対象を絞れます。
+
+GitHub 認証、Runner 登録、WSL の変更はいずれのコマンドでも行いません。UI が読むデータは既定で mock で、実接続は `VITE_RUNNERDOCK_DATA_SOURCE=live` の明示指定だけで選ばれます（実接続の実装は後続タスクです）。
+
+Linux では `cargo clippy` と `cargo test` に `--exclude runnerdock-desktop` を付けます。Tauri の shell は WebKitGTK 等の GUI 依存を要するためです。
+
+`pnpm contracts:check` と `pnpm e2e:mock` は契約として定義してありますが実体を持たず、実行すると非0で終了して対応タスクを出力します。
 
 ## 文書一覧
 
@@ -44,6 +71,7 @@ AIコーディングエージェントは、リポジトリ直下の [AGENTS.md]
 | [実装タスク雛形](templates/IMPLEMENTATION_TASK.md) | 人間・AI共通の作業指示テンプレート |
 | [Human Gate](docs/HUMAN_GATES.md) | AI 単独で確定しない人間判断の登録簿 |
 | [Linear 運用規約](docs/linear-conventions.md) | 共有コアと Runner Dock の Project Delta |
+| [versions](versions.md) | ツールチェインと依存の確認値・導入値・選定理由 |
 
 ## 採用方針の要約
 

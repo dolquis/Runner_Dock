@@ -13,5 +13,9 @@
 .env.*
 !.env.example
 
-# Rust ビルド成果物
-target/
+# ビルド生成物と依存の展開先
+/target/
+node_modules/
+dist/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/target/

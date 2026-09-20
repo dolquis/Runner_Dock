@@ -1,15 +1,17 @@
-# 純粋ドメイン。OS、Tauri、HTTP、時計、秘密情報に依存させない
-# （docs/03_ARCHITECTURE.md §1、docs/15_DEVELOPER_GUIDE.md §1）。
-# ワイヤーへ出る型は protocol が持ち、この crate はそれを use する。
 [package]
-name = "runnerdock-core"
+name = "runnerdock-cli"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[[bin]]
+name = "runnerdock"
+path = "src/main.rs"
+
 [dependencies]
+clap = { workspace = true }
 runnerdock-protocol = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

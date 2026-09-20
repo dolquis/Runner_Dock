@@ -86,11 +86,57 @@ pub enum EffectiveState {
 }
 
 /// Backend の種別。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+///
+/// ワイヤー表現は `docs/10_IPC_DATA_MODEL.md` §6 の
+/// `kind IN ('native_windows','wsl')` と一致させる。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum BackendKind {
     NativeWindows,
     Wsl,
+}
+
+impl BackendKind {
+    /// 既知の Backend 種別の全体。
+    pub const ALL: &'static [Self] = &[Self::NativeWindows, Self::Wsl];
+
+    /// 永続化とワイヤーで使う識別子。表示名とは分ける（ADR-015）。
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NativeWindows => "native_windows",
+            Self::Wsl => "wsl",
+        }
+    }
+}
+
+/// [`BackendKind`] として解釈できない識別子。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseBackendKindError {
+    /// 受け取った識別子。表示とログのために保つ。
+    pub value: String,
+}
+
+impl std::fmt::Display for ParseBackendKindError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "未知の Backend 種別: {}", self.value)
+    }
+}
+
+impl std::error::Error for ParseBackendKindError {}
+
+impl std::str::FromStr for BackendKind {
+    type Err = ParseBackendKindError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|kind| kind.as_str() == s)
+            .ok_or_else(|| ParseBackendKindError {
+                value: s.to_owned(),
+            })
+    }
 }
 
 /// Scope の種別。
@@ -253,6 +299,17 @@ pub struct OperationAccepted {
     /// 既定値を認めて例がそのまま復号できるようにする。
     #[serde(default)]
     pub deduplicated: bool,
+}
+
+/// handshake の要求。呼び出し側の自己申告。
+///
+/// `implementation_version` は診断とログの相関のためだけに使い、互換性の判定には
+/// `protocol_major` だけを見る（`docs/03_ARCHITECTURE.md` §8）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HandshakeRequest {
+    pub protocol_major: u32,
+    pub implementation_version: String,
 }
 
 /// handshake の応答。

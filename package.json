@@ -1,0 +1,20 @@
+{
+  "name": "runnerdock",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Runner Dock monorepo root",
+  "license": "MIT OR Apache-2.0",
+  "packageManager": "pnpm@12.5.1",
+  "engines": {
+    "node": ">=24.21.0 <25"
+  },
+  "scripts": {
+    "dev:mock": "pnpm --filter @runnerdock/desktop dev",
+    "desktop:dev": "pnpm --filter @runnerdock/desktop tauri dev",
+    "build": "pnpm --filter @runnerdock/desktop build",
+    "lint": "pnpm --filter @runnerdock/desktop lint",
+    "test": "pnpm --filter @runnerdock/desktop test",
+    "contracts:check": "node scripts/dev/not-implemented.mjs contracts:check LF-002",
+    "e2e:mock": "node scripts/dev/not-implemented.mjs e2e:mock LF-010"
+  }
+}

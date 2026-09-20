@@ -8,6 +8,14 @@
       "description": "Backend（`NativeWindows` または具体的な WSL 環境）の ID。",
       "type": "string"
     },
+    "BackendKind": {
+      "description": "Backend の種別。\n\nワイヤー表現は `docs/10_IPC_DATA_MODEL.md` §6 の\n`kind IN ('native_windows','wsl')` と一致させる。",
+      "enum": [
+        "native_windows",
+        "wsl"
+      ],
+      "type": "string"
+    },
     "CredentialRefId": {
       "description": "秘密本体を含まない資格情報参照の ID。",
       "type": "string"
@@ -309,6 +317,24 @@
           "type": "object"
         }
       ]
+    },
+    "HandshakeRequest": {
+      "description": "handshake の要求。呼び出し側の自己申告。\n\n`implementation_version` は診断とログの相関のためだけに使い、互換性の判定には\n`protocol_major` だけを見る（`docs/03_ARCHITECTURE.md` §8）。",
+      "properties": {
+        "implementationVersion": {
+          "type": "string"
+        },
+        "protocolMajor": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "protocolMajor",
+        "implementationVersion"
+      ],
+      "type": "object"
     },
     "HandshakeResult": {
       "description": "handshake の応答。",
@@ -821,6 +847,14 @@
     },
     "ScopeId": {
       "description": "Scope（GitHub host と repo/org の組）の ID。",
+      "type": "string"
+    },
+    "ScopeKind": {
+      "description": "Scope の種別。",
+      "enum": [
+        "repo",
+        "org"
+      ],
       "type": "string"
     },
     "Timestamp": {

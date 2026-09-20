@@ -16,6 +16,14 @@ export type AgentGeneration = string;
 export type BackendId = string;
 
 /**
+ * Backend の種別。
+ *
+ * ワイヤー表現は `docs/10_IPC_DATA_MODEL.md` §6 の
+ * `kind IN ('native_windows','wsl')` と一致させる。
+ */
+export type BackendKind = "native_windows" | "wsl";
+
+/**
  * 秘密本体を含まない資格情報参照の ID。
  */
 export type CredentialRefId = string;
@@ -121,6 +129,17 @@ export type HandshakeRejection = {
   readonly peerProtocolMajor: number;
   readonly reason: "peer_too_new";
 };
+
+/**
+ * handshake の要求。呼び出し側の自己申告。
+ *
+ * `implementation_version` は診断とログの相関のためだけに使い、互換性の判定には
+ * `protocol_major` だけを見る（`docs/03_ARCHITECTURE.md` §8）。
+ */
+export interface HandshakeRequest {
+  readonly implementationVersion: string;
+  readonly protocolMajor: number;
+}
 
 /**
  * handshake の応答。
@@ -342,6 +361,11 @@ export interface RunnerObservation {
  * Scope（GitHub host と repo/org の組）の ID。
  */
 export type ScopeId = string;
+
+/**
+ * Scope の種別。
+ */
+export type ScopeKind = "repo" | "org";
 
 /**
  * UTC の RFC3339 時刻

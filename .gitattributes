@@ -1,0 +1,8 @@
+# 改行を LF に統一する。同じファイルを Windows と WSL の双方から扱うため、
+# checkout 環境で内容が変わると lockfile の hash や Guest 側の shell 実行が
+# 環境差の影響を受ける（NFR-003）。
+* text=auto eol=lf
+
+# バイナリ資産は変換対象から外す。
+*.png binary
+*.ico binary

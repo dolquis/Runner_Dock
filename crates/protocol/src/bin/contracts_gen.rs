@@ -18,8 +18,9 @@ use serde_json::{Map, Value};
 
 use runnerdock_protocol::PROTOCOL_MAJOR;
 use runnerdock_protocol::dto::{
-    CredentialRefView, ForceStopRequest, HandshakeRejection, HandshakeResult, NodeOperationRequest,
-    NodeSnapshot, OperationAccepted, OperationSnapshot,
+    BackendKind, CredentialRefView, ForceStopRequest, HandshakeRejection, HandshakeRequest,
+    HandshakeResult, NodeOperationRequest, NodeSnapshot, OperationAccepted, OperationSnapshot,
+    ScopeKind,
 };
 use runnerdock_protocol::error::ErrorPayload;
 use runnerdock_protocol::message::{EventKind, Message};
@@ -34,10 +35,13 @@ struct ContractSurface {
     message: Message,
     method: Method,
     event_kind: EventKind,
+    backend_kind: BackendKind,
+    scope_kind: ScopeKind,
     node_snapshot: NodeSnapshot,
     operation_snapshot: OperationSnapshot,
     error_payload: ErrorPayload,
     credential_ref: CredentialRefView,
+    handshake_request: HandshakeRequest,
     handshake_result: HandshakeResult,
     handshake_rejection: HandshakeRejection,
     node_operation_request: NodeOperationRequest,
