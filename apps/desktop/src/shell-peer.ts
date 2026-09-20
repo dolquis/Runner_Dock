@@ -5,12 +5,15 @@
  * ことを `null` として区別する。取得できなかったことを既定値で埋めない。
  */
 import { invoke } from "@tauri-apps/api/core";
+import type { HandshakeRequest } from "@runnerdock/contracts";
 
-/** `crates/protocol` の `Peer` に対応する型。LF-002 で生成型へ置き換える。 */
-export interface ShellPeer {
-  protocolVersion: number;
-  implementation: string;
-}
+/**
+ * shell の自己申告。`crates/protocol` から生成した型をそのまま使う。
+ *
+ * 手で写した型を置かない。契約が変われば生成物が変わり、`pnpm lint` の型検査と
+ * `contracts-gen --check` の両方で食い違いが出る（ADR-017）。
+ */
+export type ShellPeer = HandshakeRequest;
 
 /** Tauri の shell 上で動いているかを判定する。 */
 export function hasTauriShell(): boolean {

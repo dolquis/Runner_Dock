@@ -1,5 +1,6 @@
 # 純粋ドメイン。OS、Tauri、HTTP、時計、秘密情報に依存させない
 # （docs/03_ARCHITECTURE.md §1、docs/15_DEVELOPER_GUIDE.md §1）。
+# ワイヤーへ出る型は protocol が持ち、この crate はそれを use する。
 [package]
 name = "runnerdock-core"
 version.workspace = true
@@ -9,8 +10,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+runnerdock-protocol = { workspace = true }
 serde = { workspace = true }
-thiserror = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

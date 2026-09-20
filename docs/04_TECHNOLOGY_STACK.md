@@ -39,7 +39,7 @@ React Compilerは測定用ブランチで評価可能としますが、MVPの必
 
 ## 4. 型の共有
 
-`crates/protocol`をワイヤー契約の正とし、serde DTOからJSON Schema/TypeScriptを生成する薄いツールを作ります。候補はschemarsと検証済み型生成ツールですが、crateのstable状況・nullable/enum/u64表現をLF-002で確認して固定します。
+`crates/protocol`をワイヤー契約の正とし、serde DTOからJSON Schema/TypeScriptを生成する薄いツールを作ります。候補はschemarsと検証済み型生成ツールですが、crateのstable状況・nullable/enum/u64表現をLF-002で確認して固定します([ADR-017](17_ADR.md))。
 
 RCの便利なbindingを理由に通信契約をツール依存へ固定しません。GitHub数値IDは内部で整数、UIとの境界では10進文字列に変換し、JavaScriptの整数精度差を回避します。
 

@@ -25,7 +25,7 @@ jobs:
   # 純粋ロジックは Linux で検査する。Windows hosted の使用量を抑えるため
   # だが、必要な Windows 試験を省いて「節約できた」とは扱わない。
   rust-linux:
-    name: Rust (Linux, core / protocol / agent / guest / cli)
+    name: Rust (Linux, core / protocol / agent / guest / cli) + 契約生成物の差分検出
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -52,6 +52,11 @@ jobs:
 
       - name: Test
         run: cargo test --workspace --exclude runnerdock-desktop --locked
+
+      # 生成物が crates/protocol とずれたまま merge されるのを止める。
+      # 失敗したら再生成して commit する（ADR-017、LF-002 の完了条件）。
+      - name: 契約生成物の差分検出
+        run: cargo run -p runnerdock-protocol --bin contracts-gen --locked -- --check
 
   frontend:
     name: Frontend (lint / test / build)

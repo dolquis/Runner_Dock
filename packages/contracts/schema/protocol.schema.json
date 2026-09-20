@@ -1,0 +1,871 @@
+{
+  "$defs": {
+    "AgentGeneration": {
+      "description": "Agent の世代。Agent が再起動すると変わり、旧世代の event を捨てるのに使う。",
+      "type": "string"
+    },
+    "BackendId": {
+      "description": "Backend（`NativeWindows` または具体的な WSL 環境）の ID。",
+      "type": "string"
+    },
+    "BackendKind": {
+      "description": "Backend の種別。\n\nワイヤー表現は `docs/10_IPC_DATA_MODEL.md` §6 の\n`kind IN ('native_windows','wsl')` と一致させる。",
+      "enum": [
+        "native_windows",
+        "wsl"
+      ],
+      "type": "string"
+    },
+    "CredentialRefId": {
+      "description": "秘密本体を含まない資格情報参照の ID。",
+      "type": "string"
+    },
+    "CredentialRefView": {
+      "description": "秘密本体を含まない資格情報の表示用ビュー。",
+      "properties": {
+        "credentialRefId": {
+          "$ref": "#/$defs/CredentialRefId"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "permissionSummary": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "purpose": {
+          "description": "用途。ローカル管理用と Workflow 監視用を混同しない。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "credentialRefId",
+        "purpose",
+        "permissionSummary"
+      ],
+      "type": "object"
+    },
+    "DecimalU64": {
+      "description": "符号なし 64bit 整数を 10 進文字列で表したもの",
+      "pattern": "^(0|[1-9][0-9]*)$",
+      "type": "string"
+    },
+    "DesiredState": {
+      "description": "利用者の意図。進行中の操作とは別に保持する。",
+      "enum": [
+        "running",
+        "stopped",
+        "removed"
+      ],
+      "type": "string"
+    },
+    "EffectiveState": {
+      "description": "UI へ出す有効状態。`docs/05_DOMAIN_STATE.md` §4 の表に対応する。",
+      "oneOf": [
+        {
+          "enum": [
+            "busy",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "description": "稼働しており受付可能という観測。予約済みという意味ではない。",
+          "type": "string"
+        },
+        {
+          "const": "disconnected",
+          "description": "ローカルは動いているが GitHub から見えない。",
+          "type": "string"
+        },
+        {
+          "const": "reconciling",
+          "description": "ローカル停止だが GitHub は Idle と言っている。緑にしない。",
+          "type": "string"
+        },
+        {
+          "const": "monitoring_unavailable",
+          "description": "API 認証失効等で観測自体ができない。Runner が落ちたと断定しない。",
+          "type": "string"
+        },
+        {
+          "const": "partial",
+          "description": "Node 内の Backend ごとに結果が割れている。",
+          "type": "string"
+        }
+      ]
+    },
+    "ErrorCode": {
+      "description": "機械判定用のエラー code。日本語訳を変えても動作が変わらないようにする。",
+      "oneOf": [
+        {
+          "enum": [
+            "PERMISSION_OR_POLICY",
+            "RATE_LIMITED",
+            "RUNNER_BUSY",
+            "PROTOCOL_MISMATCH",
+            "REQUIRES_CONFIRMATION",
+            "CHECKSUM_MISMATCH",
+            "WSL_GUEST_UNREACHABLE"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "AUTH_EXPIRED",
+          "description": "認証が失効した。Runner が落ちたと断定しない。",
+          "type": "string"
+        },
+        {
+          "const": "STATUS_STALE",
+          "description": "観測が古い。成功へ丸めない。",
+          "type": "string"
+        },
+        {
+          "const": "PATH_NOT_OWNED",
+          "description": "管理対象外の path を操作しようとした。",
+          "type": "string"
+        },
+        {
+          "const": "REVISION_CONFLICT",
+          "description": "`expectedRevision` が現在値と食い違う。",
+          "type": "string"
+        },
+        {
+          "const": "REQUEST_ID_CONFLICT",
+          "description": "受理済みの `requestId` が、別の操作のために使い回された。\n\n`docs/10_IPC_DATA_MODEL.md` §8 は「主な code」を列挙する形なので、その一覧へ\n足す追加として扱う。冪等キーの一致だけで再送とみなすと、確認や revision の\nゲートを迂回できてしまうため、一致しない使い回しは明示的に拒否する。",
+          "type": "string"
+        }
+      ]
+    },
+    "ErrorPayload": {
+      "description": "ワイヤー上のエラー payload。",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "details": {
+          "additionalProperties": true,
+          "default": {},
+          "description": "構造化した補足。秘密・生応答・コマンドラインを入れない。",
+          "type": "object"
+        },
+        "messageKey": {
+          "description": "UI 側の翻訳キー。表示文字列そのものではない。",
+          "type": "string"
+        },
+        "operationId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OperationId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requiresConfirmation": {
+          "type": "boolean"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "messageKey",
+        "retryable",
+        "requiresConfirmation"
+      ],
+      "type": "object"
+    },
+    "Event": {
+      "description": "Agent が push する差分イベント。",
+      "properties": {
+        "agentGeneration": {
+          "$ref": "#/$defs/AgentGeneration",
+          "description": "発行元 Agent の世代。変わったら旧世代の event を捨てる。"
+        },
+        "event": {
+          "$ref": "#/$defs/EventKind"
+        },
+        "payload": {
+          "default": null
+        },
+        "protocolMajor": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sequence": {
+          "$ref": "#/$defs/DecimalU64",
+          "description": "単調増加の連番。10 進文字列で運ぶ。"
+        }
+      },
+      "required": [
+        "protocolMajor",
+        "sequence",
+        "agentGeneration",
+        "event"
+      ],
+      "type": "object"
+    },
+    "EventKind": {
+      "description": "発行しうる event の全体。",
+      "oneOf": [
+        {
+          "enum": [
+            "runner.observation.changed",
+            "node.observation.changed",
+            "operation.changed",
+            "log.appended"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "resync.required",
+          "description": "取りこぼしが起きたので snapshot を取り直せという通知。",
+          "type": "string"
+        }
+      ]
+    },
+    "ForceStopRequest": {
+      "description": "強制停止の要求 payload。確認 challenge を必須にする。",
+      "properties": {
+        "confirmation": {
+          "description": "UI が提示した確認 challenge の応答。`null` なら受理しない。",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "nodeId": {
+          "$ref": "#/$defs/NodeId"
+        }
+      },
+      "required": [
+        "nodeId",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "HandshakeRejection": {
+      "description": "handshake が不一致だった理由。\n\n「接続できません」へ丸めない。本体・Agent・Guest は同じ互換表で管理するので\n（`docs/03_ARCHITECTURE.md` §8）、どちら側を更新すべきかを利用者が判断できる\n必要がある。相手が古いのか新しいのかを分け、双方の major を payload に載せる。",
+      "oneOf": [
+        {
+          "description": "相手の major が古い。相手側の更新が要る。",
+          "properties": {
+            "expectedProtocolMajor": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "peerProtocolMajor": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reason": {
+              "const": "peer_too_old",
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason",
+            "peerProtocolMajor",
+            "expectedProtocolMajor"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "相手の major が新しい。こちら側の更新が要る。",
+          "properties": {
+            "expectedProtocolMajor": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "peerProtocolMajor": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reason": {
+              "const": "peer_too_new",
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason",
+            "peerProtocolMajor",
+            "expectedProtocolMajor"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "HandshakeRequest": {
+      "description": "handshake の要求。呼び出し側の自己申告。\n\n`implementation_version` は診断とログの相関のためだけに使い、互換性の判定には\n`protocol_major` だけを見る（`docs/03_ARCHITECTURE.md` §8）。",
+      "properties": {
+        "implementationVersion": {
+          "type": "string"
+        },
+        "protocolMajor": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "protocolMajor",
+        "implementationVersion"
+      ],
+      "type": "object"
+    },
+    "HandshakeResult": {
+      "description": "handshake の応答。",
+      "properties": {
+        "agentGeneration": {
+          "$ref": "#/$defs/AgentGeneration"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "implementationVersion": {
+          "type": "string"
+        },
+        "protocolMajor": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "protocolMajor",
+        "implementationVersion",
+        "agentGeneration",
+        "capabilities"
+      ],
+      "type": "object"
+    },
+    "LocalRuntime": {
+      "description": "ローカルのプロセス・Guest の観測状態。",
+      "enum": [
+        "not_provisioned",
+        "starting",
+        "running",
+        "stopping",
+        "stopped",
+        "lost",
+        "error",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "Message": {
+      "description": "ワイヤー上を流れる 1 メッセージ。\n\nminor 追加との互換性のため payload 側は `Value` のまま受け取り、method ごとの\n具体型へは受理後に変換する。未知の `kind` は復号段階で拒否する。",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Request",
+          "properties": {
+            "kind": {
+              "const": "request",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/Response",
+          "properties": {
+            "kind": {
+              "const": "response",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/Event",
+          "properties": {
+            "kind": {
+              "const": "event",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Method": {
+      "description": "Agent が受け付ける method の全体。",
+      "enum": [
+        "system.handshake",
+        "system.doctor",
+        "node.snapshot",
+        "node.start",
+        "node.stop",
+        "node.forceStop",
+        "runner.planCreate",
+        "runner.applyCreate",
+        "runner.planRemove",
+        "runner.applyRemove",
+        "operation.get",
+        "operation.cancel",
+        "auth.beginDevice",
+        "auth.cancel",
+        "auth.logout",
+        "credential.import",
+        "events.subscribe",
+        "logs.subscribe",
+        "logs.export",
+        "settings.plan",
+        "settings.apply"
+      ],
+      "type": "string"
+    },
+    "NodeId": {
+      "description": "Node（物理 PC 1 台と所有ユーザー文脈の組）の ID。",
+      "type": "string"
+    },
+    "NodeOperationRequest": {
+      "description": "`node.start` / `node.stop` の要求 payload。",
+      "properties": {
+        "expectedRevision": {
+          "description": "直前に読んだ snapshot の revision。ずれていれば `REVISION_CONFLICT`。",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "nodeId": {
+          "$ref": "#/$defs/NodeId"
+        }
+      },
+      "required": [
+        "nodeId",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "NodeSnapshot": {
+      "description": "Node と配下 Runner の観測。秘密は含めない。",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "effective": {
+          "$ref": "#/$defs/EffectiveState",
+          "description": "Node 全体としての有効状態。片側だけ失敗していれば `Partial`。"
+        },
+        "nodeId": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "observedAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "revision": {
+          "description": "楽観ロック用。`node.start` 等の `expectedRevision` と照合する。\n\nGitHub ID や event sequence と違い、10 進文字列にしない。§5 が文字列を課すのは\nその 2 つで、revision は Agent が採番する小さな連番であり、§3 の例も数値で書く。",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runners": {
+          "items": {
+            "$ref": "#/$defs/RunnerObservation"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "nodeId",
+        "displayName",
+        "revision",
+        "runners",
+        "effective",
+        "observedAt"
+      ],
+      "type": "object"
+    },
+    "ObservationFreshness": {
+      "description": "最後に成功した観測（`verified_at`）からの鮮度。",
+      "enum": [
+        "fresh",
+        "stale",
+        "never_observed"
+      ],
+      "type": "string"
+    },
+    "OperationAccepted": {
+      "description": "要求を受け付けたという応答。完了ではない。",
+      "properties": {
+        "accepted": {
+          "type": "boolean"
+        },
+        "deduplicated": {
+          "default": false,
+          "description": "同じ `requestId` の再送で既存 Operation へ収束した場合に `true`。\n\n省略は「収束していない」を意味する。§3 の応答例がこの項目を持たないため、\n既定値を認めて例がそのまま復号できるようにする。",
+          "type": "boolean"
+        },
+        "operationId": {
+          "$ref": "#/$defs/OperationId"
+        }
+      },
+      "required": [
+        "operationId",
+        "accepted"
+      ],
+      "type": "object"
+    },
+    "OperationFailure": {
+      "description": "Operation 内の個別の失敗。",
+      "properties": {
+        "backendId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BackendId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "messageKey": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "messageKey"
+      ],
+      "type": "object"
+    },
+    "OperationId": {
+      "description": "Operation の ID。",
+      "type": "string"
+    },
+    "OperationKind": {
+      "description": "Operation の種別。",
+      "enum": [
+        "node_start",
+        "node_stop",
+        "node_force_stop",
+        "runner_create",
+        "runner_remove"
+      ],
+      "type": "string"
+    },
+    "OperationPhase": {
+      "description": "Operation の進行段階。`docs/05_DOMAIN_STATE.md` §5 / §6 に対応する。",
+      "oneOf": [
+        {
+          "enum": [
+            "requested",
+            "preflight",
+            "preparing",
+            "registering",
+            "starting",
+            "verifying",
+            "fresh_health_check",
+            "requires_force_confirmation",
+            "stop_signal",
+            "verify_exit",
+            "succeeded",
+            "failed",
+            "canceled"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "waiting_for_idle",
+          "description": "厳密な drain ではない。新しいジョブが割り当てられる競合は残る。",
+          "type": "string"
+        },
+        {
+          "const": "partial",
+          "description": "片側だけ成功した状態。成功側を自動削除しない。",
+          "type": "string"
+        }
+      ]
+    },
+    "OperationSnapshot": {
+      "description": "Operation の観測。",
+      "properties": {
+        "failures": {
+          "description": "段階ごとの結果。片側失敗を隠さない。",
+          "items": {
+            "$ref": "#/$defs/OperationFailure"
+          },
+          "type": "array"
+        },
+        "finishedAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/OperationKind"
+        },
+        "operationId": {
+          "$ref": "#/$defs/OperationId"
+        },
+        "phase": {
+          "$ref": "#/$defs/OperationPhase"
+        },
+        "startedAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "targetId": {
+          "description": "操作対象。Node か Runner の ID。",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId",
+        "kind",
+        "phase",
+        "targetId",
+        "startedAt",
+        "failures"
+      ],
+      "type": "object"
+    },
+    "RemoteAvailability": {
+      "description": "GitHub が「受付可能」と認識しているかどうか。",
+      "enum": [
+        "online_idle",
+        "online_busy",
+        "offline",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RemotePresence": {
+      "description": "GitHub 側に Runner 登録が存在するかどうか。`Online` とは別概念。",
+      "enum": [
+        "unchecked",
+        "registered",
+        "not_found",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "Request": {
+      "description": "UI から Agent への要求。",
+      "properties": {
+        "method": {
+          "$ref": "#/$defs/Method",
+          "description": "固定 registry の method。未知の名前は復号で失敗する。"
+        },
+        "payload": {
+          "default": null
+        },
+        "protocolMajor": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "requestId": {
+          "$ref": "#/$defs/RequestId",
+          "description": "冪等キー。同じ値の再送は同じ Operation へ収束させる。"
+        }
+      },
+      "required": [
+        "protocolMajor",
+        "requestId",
+        "method"
+      ],
+      "type": "object"
+    },
+    "RequestId": {
+      "description": "呼び出し側が採番する冪等キー。同じ値の再送を同じ Operation へ収束させる。",
+      "type": "string"
+    },
+    "Response": {
+      "description": "要求に対する応答。",
+      "properties": {
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorPayload"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "protocolMajor": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "requestId": {
+          "$ref": "#/$defs/RequestId"
+        },
+        "result": {
+          "description": "`ok=true` のときの結果。受付済みであって完了とは限らない。"
+        }
+      },
+      "required": [
+        "protocolMajor",
+        "requestId",
+        "ok"
+      ],
+      "type": "object"
+    },
+    "RunnerId": {
+      "description": "ローカルで採番する Runner の ID。GitHub 側の ID とは別物。",
+      "type": "string"
+    },
+    "RunnerObservation": {
+      "description": "1 つの Runner についての観測一式。",
+      "properties": {
+        "backendId": {
+          "$ref": "#/$defs/BackendId"
+        },
+        "desired": {
+          "$ref": "#/$defs/DesiredState"
+        },
+        "effective": {
+          "$ref": "#/$defs/EffectiveState"
+        },
+        "lastKnownAvailability": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RemoteAvailability"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "鮮度が落ちたときに副表示する最後の既知値。"
+        },
+        "local": {
+          "$ref": "#/$defs/LocalRuntime"
+        },
+        "localFreshness": {
+          "$ref": "#/$defs/ObservationFreshness"
+        },
+        "remoteAvailability": {
+          "$ref": "#/$defs/RemoteAvailability"
+        },
+        "remoteErrorCode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "観測できなかった理由。丸めずに保持する。"
+        },
+        "remoteFreshness": {
+          "$ref": "#/$defs/ObservationFreshness"
+        },
+        "remotePresence": {
+          "$ref": "#/$defs/RemotePresence"
+        },
+        "remoteRunnerId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecimalU64"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "GitHub 側の Runner ID。登録完了まで `null`。"
+        },
+        "runnerId": {
+          "$ref": "#/$defs/RunnerId"
+        },
+        "scopeId": {
+          "$ref": "#/$defs/ScopeId"
+        },
+        "verifiedAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "最後に観測へ成功した時刻。一度も成功していなければ `null`。"
+        }
+      },
+      "required": [
+        "runnerId",
+        "backendId",
+        "scopeId",
+        "desired",
+        "local",
+        "localFreshness",
+        "remotePresence",
+        "remoteAvailability",
+        "remoteFreshness",
+        "effective"
+      ],
+      "type": "object"
+    },
+    "ScopeId": {
+      "description": "Scope（GitHub host と repo/org の組）の ID。",
+      "type": "string"
+    },
+    "ScopeKind": {
+      "description": "Scope の種別。",
+      "enum": [
+        "repo",
+        "org"
+      ],
+      "type": "string"
+    },
+    "Timestamp": {
+      "description": "UTC の RFC3339 時刻",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "生成物へ載せる型の集合。ここに載せた型だけが UI から参照できる。\n\nフィールドは schema を集めるためだけのもので、値としては構築しない。",
+  "title": "Runner Dock IPC contract",
+  "x-protocolMajor": 1
+}

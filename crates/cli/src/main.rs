@@ -6,8 +6,8 @@
 //! JSON 出力に秘密を含めない（`docs/14_BACKLOG.md` LF-016）。
 
 use clap::{Parser, Subcommand};
-use runnerdock_core::BackendKind;
-use runnerdock_protocol::PROTOCOL_VERSION;
+use runnerdock_protocol::PROTOCOL_MAJOR;
+use runnerdock_protocol::dto::BackendKind;
 use serde::Serialize;
 
 #[derive(Debug, Parser)]
@@ -31,7 +31,7 @@ enum Command {
 #[serde(rename_all = "camelCase")]
 struct VersionReport {
     implementation: &'static str,
-    protocol_version: u32,
+    protocol_major: u32,
     backend_kinds: Vec<&'static str>,
 }
 
@@ -39,11 +39,8 @@ impl VersionReport {
     fn collect() -> Self {
         Self {
             implementation: env!("CARGO_PKG_VERSION"),
-            protocol_version: PROTOCOL_VERSION,
-            backend_kinds: BackendKind::all()
-                .iter()
-                .map(|kind| kind.as_str())
-                .collect(),
+            protocol_major: PROTOCOL_MAJOR,
+            backend_kinds: BackendKind::ALL.iter().map(|kind| kind.as_str()).collect(),
         }
     }
 }
@@ -57,7 +54,7 @@ fn main() -> Result<(), serde_json::Error> {
                 println!("{}", serde_json::to_string(&report)?);
             } else {
                 println!("implementation: {}", report.implementation);
-                println!("protocol: {}", report.protocol_version);
+                println!("protocol: {}", report.protocol_major);
                 println!("backends: {}", report.backend_kinds.join(", "));
             }
         }

@@ -38,7 +38,7 @@ export function App(): React.JSX.Element {
         <dd data-testid="shell-peer">
           {shellPeer === null
             ? "未接続（ブラウザ起動）"
-            : `protocol ${shellPeer.protocolVersion} / ${shellPeer.implementation}`}
+            : `protocol ${shellPeer.protocolMajor} / ${shellPeer.implementationVersion}`}
         </dd>
       </dl>
     </main>

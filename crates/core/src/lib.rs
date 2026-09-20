@@ -1,15 +1,18 @@
 //! Runner Dock の純粋ドメイン。
 //!
-//! この crate は OS 操作、Tauri、HTTP クライアント、SQLite を参照しない。
-//! 実行・時計・秘密情報・保存先は呼び出し側がインターフェースで注入する
-//! （`docs/03_ARCHITECTURE.md` §1）。
-//!
-//! LF-001 の範囲は Backend の識別子だけである。Node / Runner の希望状態と
-//! 観測状態、Operation、Reconciler は LF-002 で追加する。
+//! Tauri、WSL コマンド、GitHub HTTP クライアントに依存しない（AGENTS.md §5.2）。
+//! 時計は [`clock::Clock`] で注入し、観測値は呼び出し側が取得した JSON 断片として
+//! 受け取る。この crate は秘密情報を保持も出力もしない。
 
-// テストでは失敗時に落ちてよい。製品コード側の unwrap / expect だけを止める。
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
-pub mod backend;
+pub mod clock;
+pub mod effective;
+pub mod events;
+pub mod freshness;
+pub mod mock;
+pub mod operation;
+pub mod remote;
 
-pub use backend::{BackendKind, ParseBackendKindError};
+#[cfg(test)]
+mod tests;

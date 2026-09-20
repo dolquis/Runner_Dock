@@ -27,6 +27,7 @@ runnerdock-protocol = { path = "crates/protocol" }
 
 clap = { version = "=4.6.7", features = ["derive"] }
 serde = { version = "=1.0.229", features = ["derive"] }
+schemars = "=1.2.2"
 serde_json = "=1.0.151"
 thiserror = "=2.0.20"
 tracing = "=0.1.44"
@@ -39,3 +40,4 @@ unsafe_code = "deny"
 # docs/15_DEVELOPER_GUIDE.md §5: ユーザー操作・外部 I/O で unwrap しない。
 unwrap_used = "warn"
 expect_used = "warn"
+panic = "warn"

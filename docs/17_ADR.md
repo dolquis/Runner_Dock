@@ -161,3 +161,15 @@
 **比較:** MIT単独は簡潔だが特許許諾の明文がない。Apache-2.0単独は特許条項を持つがGPLv2との組合せに制約がある。GPL系は改変物の公開を求められるが、所有者にクローズドな有料化の予定はなく、採用障壁の低さを優先した。採用予定の主要依存(Tauri、Tokio、SQLx、windows-rs)はMITまたはApache-2.0系である。
 
 **帰結:** 第三者による商用・クローズドな利用を許容する。公開済みの版に付与した許諾は撤回できない。製品名とロゴの利用権はライセンスに含めない。依存関係のライセンス適合とNOTICEの要否はLF-022で確認する。HomeRunのコードは取り込まないため、同プロジェクトのMIT表示を引き継ぐ必要はない(ADR-001)。
+
+## ADR-017: ワイヤー契約の生成を`crates/protocol`側の薄いツールに閉じる
+
+**状態:** Accepted / **決定日:** 2026-09-20(LF-002で実装)
+
+**背景:** [技術選定](04_TECHNOLOGY_STACK.md)§4は、`crates/protocol`のserde DTOからJSON SchemaとTypeScriptを生成する方針を示しつつ、crateのstable状況とnullable/enum/u64表現の確認をLF-002へ委ねていた。Rust側の型生成crateには、通信契約をツール固有の出力形式へ縛るもの、生成をtest実行に結び付けるもの、`u64`をJavaScriptのnumberへ落とすものがある。
+
+**決定:** JSON Schemaの生成にschemarsを使い、TypeScriptはschemarsの出力から`crates/protocol`内の`contracts-gen`が直接組み立てる。生成物は`packages/contracts/`へcommitし、同じバイナリの`--check`が再生成結果と突き合わせてCIを止める。[開発者ガイド](15_DEVELOPER_GUIDE.md)§4が挙げる`pnpm contracts:check`は、pnpm workspaceを作る際にこのコマンドを包む設計とする。
+
+**比較:** TypeScript生成crateを追加する案は記述量が減るが、ワイヤー契約の表現がそのcrateの都合に従属する。生成物を持たずビルド時に作る案は差分検出ができない。自前の変換器は、この repo が実際に出すschemaの形(object、文字列enum、`$ref`、配列、`Option`のanyOf、内部タグ付きenum)だけを扱えばよく、想定外の形は`unknown`として表面化する。
+
+**帰結:** `u64`は[DecimalU64](10_IPC_DATA_MODEL.md)として10進文字列で渡り、TypeScript側は`string`になる。`Option`は`| null`、enumは文字列のunion、内部タグ付きenumは判別用`kind`を持つ交差型として出る。生成物を手で編集しない。protocolのDTOを変えたら同じPRで再生成する。schemaの新しい形を使い始めるときは変換器の対応を先に足す。

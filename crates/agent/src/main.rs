@@ -9,7 +9,8 @@
 
 use std::io;
 
-use runnerdock_protocol::{PROTOCOL_VERSION, Peer};
+use runnerdock_protocol::PROTOCOL_MAJOR;
+use runnerdock_protocol::dto::HandshakeRequest;
 
 fn main() -> io::Result<()> {
     tracing_subscriber::fmt()
@@ -22,13 +23,13 @@ fn main() -> io::Result<()> {
         )
         .init();
 
-    let peer = Peer {
-        protocol_version: PROTOCOL_VERSION,
-        implementation: env!("CARGO_PKG_VERSION").to_owned(),
+    let peer = HandshakeRequest {
+        protocol_major: PROTOCOL_MAJOR,
+        implementation_version: env!("CARGO_PKG_VERSION").to_owned(),
     };
     tracing::info!(
-        protocol_version = peer.protocol_version,
-        implementation = %peer.implementation,
+        protocol_major = peer.protocol_major,
+        implementation_version = %peer.implementation_version,
         "runnerdock agent self-check"
     );
 

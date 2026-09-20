@@ -33,6 +33,7 @@ WebView2 と MSVC ビルドツールは OS 側の前提であり、このファ�
 | `tauri-build` | 2.6.3 | 2.6.3 | `tauri` 2.11 系に対応する build 時 crate |
 | `serde` | 1.0.229 | 1.0.229 | DTO の直列化 |
 | `serde_json` | 1.0.151 | 1.0.151 | IPC ペイロードと CLI の JSON 出力 |
+| `schemars` | 1.2.2 | 1.2.2 | serde DTO から JSON Schema を生成する。TypeScript は `contracts-gen` がこの出力から組む（ADR-017） |
 | `thiserror` | 2.0.20 | 2.0.20 | 型付きエラー |
 | `tracing` | 0.1.44 | 0.1.44 | 構造化ログ |
 | `tracing-subscriber` | 0.3.23 | 0.3.23 | ログ出力先とフィルタ |
@@ -40,7 +41,7 @@ WebView2 と MSVC ビルドツールは OS 側の前提であり、このファ�
 
 確認元は crates.io の versions API（`https://crates.io/api/v1/crates/<crate>/versions`）で、yank 済みと prerelease を除いた最新安定版である。`tauri` と `tauri-build` は 2 系に限定して取った。
 
-`tokio`、`reqwest`、`sqlx`、`windows`、`schemars` は LF-002 以降で導入する。使う段になってから確認値を取り直す。`anyhow` は使う crate ができた時点で追加する。
+`tokio`、`reqwest`、`sqlx`、`windows` は後続タスクで導入する。使う段になってから確認値を取り直す。`anyhow` は使う crate ができた時点で追加する。
 
 ## 4. JavaScript 依存
 

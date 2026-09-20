@@ -10,10 +10,14 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+schemars = { workspace = true }
 serde = { workspace = true }
-
-[dev-dependencies]
 serde_json = { workspace = true }
 
 [lints]
 workspace = true
+
+# JSON Schema と TypeScript を生成する。--check で差分検出（ADR-017）。
+[[bin]]
+name = "contracts-gen"
+path = "src/bin/contracts_gen.rs"

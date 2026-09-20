@@ -12,7 +12,6 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { workspace = true }
-runnerdock-core = { workspace = true }
 runnerdock-protocol = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
