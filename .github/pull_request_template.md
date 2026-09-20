@@ -5,7 +5,10 @@
 ## Linked Linear issue
 
 - Linear: DEV-xx / pending
+- LF task: LF-xxx / N/A
+- 対応 FR / NFR / ADR:
 <!-- GitHub Issue ミラーがあれば Fixes #N / Refs #N を併記。人間ゲート・検証メモ待ちは Fixes を使わず Refs -->
+<!-- LF は docs/14_BACKLOG.md のローカル識別子。Linear の DEV-<番号> とは別系統で、状態の代わりに使わない -->
 
 ## Scope
 
@@ -32,6 +35,15 @@
 
 - Not run / reason / impact:
 - [ ] セルフレビュー実施（`AGENTS.md` の「検証とセルフレビュー」）
+
+## Risk and rollback
+
+<!-- 残存リスクと、レビューで重点的に見てほしい観点 -->
+
+- 残存リスク:
+- レビュー観点:
+- ロールバック方法: <!-- revert で足りるか、手順や後始末が要るか -->
+- 未確認事項: <!-- 実機でしか確認できない項目は docs/HUMAN_GATES.md の該当 HG を書く -->
 
 ## Documentation impact
 

@@ -87,9 +87,9 @@ Skill の行は、その Skill が指定する参照まで含む。表に無い�
 
 ## 6. 検証とセルフレビュー
 
-- 文書と Skill を変更したら `python3 scripts/docs-lint.py --baseline .docs-lint-baseline.json`、`python3 scripts/check_agent_instruction_size.py`、`docs-lint.py --category mirror` を実行する。CI 必須ゲートの再現は `pre-commit run --all-files` である。
+- 文書と Skill を変更したら `python3 scripts/docs-lint.py --baseline .docs-lint-baseline.json`、`python3 scripts/docs-lint.py --category mirror`、`python3 scripts/check_agent_instruction_size.py` を実行する。CI 必須ゲートの再現は `pre-commit run --all-files` である。
 - 実装が入ったら `docs/15_DEVELOPER_GUIDE.md`「初期化後に定義する開発コマンド」の最小ゲートを使う。定義前の段階でそこに書かれたコマンドが動くと扱わない。
-- repo 内ファイルを変更したら、最終報告前と stage、commit、push、PR 更新前に `pre-pr-self-review` を使う。使えない環境では `origin/main` との全差分と未追跡ファイル、secret や生成物の混入、編集境界、文書同期を確認する。
+- repo 内ファイルを変更したら、最終報告前と stage、commit、push、PR 更新前に `pre-pr-self-review` を使う。使えない環境では `origin/main` との全差分と未追跡ファイル、secret の混入、編集境界、文書同期を確認する。
 - モックで動いたことと Windows / WSL 実機で動いたことを分ける。未実行のテストは「未実行」と明記し、成功と書かない。実機でしか確認できない項目を無断で skip しない。
 - 変更起因の問題は修正して検証を再実行する。無関係な既存問題は勝手に直さず報告する。未実施・失敗・既存失敗は理由と影響を明記する。ツール診断や CI の成功を §8 の Human Gate の証拠に置き換えない。
 
