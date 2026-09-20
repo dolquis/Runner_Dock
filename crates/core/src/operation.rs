@@ -76,12 +76,44 @@ impl OperationRecord {
     }
 }
 
+/// 強制停止の確認 challenge。
+///
+/// `docs/10_IPC_DATA_MODEL.md` §4 は `node.forceStop` に confirmation challenge を
+/// 必須とし、`docs/05_DOMAIN_STATE.md` §6 は確認ダイアログに対象と観測時刻を出すと
+/// している。「何か入力したか」ではなく、Agent が発行したこの値との完全一致で判定する。
+///
+/// `token` の生成は呼び出し側の責務である。core は乱数源を持たないため、Agent が
+/// OS の乱数で作った値を渡す。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForceStopChallenge {
+    pub token: String,
+    /// この challenge が有効な対象。別の Node の確認を使い回させない。
+    pub target_id: String,
+    /// 発行時点の revision。状態が動いたら無効になる。
+    pub expected_revision: u64,
+    pub issued_at: UnixMillis,
+    pub expires_at: UnixMillis,
+}
+
+impl ForceStopChallenge {
+    /// 発行から失効までの時間。確認ダイアログを開いたまま放置された値を通さない。
+    pub const TTL_MILLIS: i64 = 120_000;
+
+    /// この時刻で使えるか。
+    #[must_use]
+    pub const fn is_valid_at(&self, now: UnixMillis) -> bool {
+        now.elapsed_since(self.expires_at) <= 0
+    }
+}
+
 /// 受理済み Operation の集合。Agent が 1 つだけ持つ。
 #[derive(Debug, Default)]
 pub struct OperationStore {
     by_request: HashMap<RequestId, OperationId>,
     records: HashMap<OperationId, OperationRecord>,
     next_id: u64,
+    /// 発行済みで未使用の強制停止 challenge。対象ごとに 1 件だけ持つ。
+    pending_challenges: HashMap<String, ForceStopChallenge>,
 }
 
 impl OperationStore {
@@ -136,16 +168,10 @@ impl OperationStore {
         }
 
         if request.kind == OperationKind::NodeForceStop
-            && request
-                .confirmation
-                .as_ref()
-                .is_none_or(|value| value.trim().is_empty())
+            && !self.consume_challenge(request, current_revision, now)
         {
-            // API が不明な場合も確認なしの停止へ進めない。
-            //
-            // ここは「空でない応答があるか」までしか見ない。challenge を Agent 側で
-            // 発行して照合する経路は IPC を実装する LF-005 の範囲で、この段階では
-            // 確認を省略できないことだけを保証する。
+            // API が不明な場合も確認なしの停止へ進めない。発行済み challenge との
+            // 完全一致だけを確認済みとみなす。
             return Err(ErrorPayload::new(ErrorCode::RequiresConfirmation));
         }
 
@@ -171,6 +197,63 @@ impl OperationStore {
             accepted: true,
             deduplicated: false,
         })
+    }
+
+    /// 強制停止の確認 challenge を発行する。
+    ///
+    /// `token` は呼び出し側が OS の乱数で作る。対象ごとに 1 件だけ保持し、発行し直すと
+    /// 前の値は無効になる。
+    pub fn issue_force_stop_challenge(
+        &mut self,
+        token: String,
+        target_id: &str,
+        expected_revision: u64,
+        now: UnixMillis,
+    ) -> ForceStopChallenge {
+        let challenge = ForceStopChallenge {
+            token,
+            target_id: target_id.to_owned(),
+            expected_revision,
+            issued_at: now,
+            expires_at: now.plus_millis(ForceStopChallenge::TTL_MILLIS),
+        };
+        self.pending_challenges
+            .insert(target_id.to_owned(), challenge.clone());
+        challenge
+    }
+
+    /// 要求に付いた確認応答が、発行済み challenge と一致するか判定する。
+    ///
+    /// 一致したら使い切る。同じ値の再送で 2 回目の強制停止を通さない。
+    fn consume_challenge(
+        &mut self,
+        request: &OperationRequest,
+        current_revision: u64,
+        now: UnixMillis,
+    ) -> bool {
+        let Some(answer) = request.confirmation.as_ref() else {
+            return false;
+        };
+        let Some(challenge) = self.pending_challenges.get(&request.target_id) else {
+            return false;
+        };
+
+        let matches = challenge.token == *answer
+            && challenge.target_id == request.target_id
+            && challenge.expected_revision == current_revision
+            && challenge.is_valid_at(now);
+        if !matches {
+            return false;
+        }
+
+        self.pending_challenges.remove(&request.target_id);
+        true
+    }
+
+    /// 発行済みで未使用の challenge を読む。
+    #[must_use]
+    pub fn pending_challenge(&self, target_id: &str) -> Option<&ForceStopChallenge> {
+        self.pending_challenges.get(target_id)
     }
 
     /// 登録応答で得た remote ID を記録する。ローカル保存より前に呼ぶ。

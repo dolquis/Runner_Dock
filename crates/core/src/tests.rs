@@ -18,7 +18,7 @@ use crate::effective::{self, Conflict, EffectiveInput};
 use crate::events::{ApplyOutcome, EventApplier, PushOutcome, SubscriberQueue};
 use crate::freshness::{self, ObservationTarget, VerifiedAt};
 use crate::mock::{MockBackend, MockScenario};
-use crate::operation::{OperationRequest, OperationStore, StopReadiness};
+use crate::operation::{ForceStopChallenge, OperationRequest, OperationStore, StopReadiness};
 use crate::remote::{self, BusyField, StatusField};
 
 const T0: UnixMillis = UnixMillis(1_789_862_400_000);
@@ -557,10 +557,13 @@ fn a_force_stop_without_confirmation_is_refused() {
 }
 
 #[test]
-fn a_force_stop_with_a_blank_confirmation_is_refused() {
+fn a_force_stop_with_an_arbitrary_string_is_refused() {
+    // 「何か入力したか」では確認にならない。発行済み challenge との完全一致だけを
+    // 確認済みとみなす。
     let mut store = OperationStore::new();
+    store.issue_force_stop_challenge("confirm-abc".to_owned(), "node-home", 1, T0);
     let mut req = request(OperationKind::NodeForceStop, "req-force", 1);
-    req.confirmation = Some("   ".to_owned());
+    req.confirmation = Some("x".to_owned());
 
     let error = store.submit(&req, 1, IDLE, T0).unwrap_err();
 
@@ -568,16 +571,85 @@ fn a_force_stop_with_a_blank_confirmation_is_refused() {
 }
 
 #[test]
-fn a_confirmed_force_stop_is_accepted() {
+fn a_force_stop_without_an_issued_challenge_is_refused() {
     let mut store = OperationStore::new();
     let mut req = request(OperationKind::NodeForceStop, "req-force", 1);
-    req.confirmation = Some("runner-windows".to_owned());
+    req.confirmation = Some("confirm-abc".to_owned());
+
+    let error = store.submit(&req, 1, IDLE, T0).unwrap_err();
+
+    assert_eq!(error.code, ErrorCode::RequiresConfirmation);
+}
+
+#[test]
+fn a_challenge_issued_for_another_target_does_not_authorise_this_one() {
+    let mut store = OperationStore::new();
+    store.issue_force_stop_challenge("confirm-abc".to_owned(), "node-other", 1, T0);
+    let mut req = request(OperationKind::NodeForceStop, "req-force", 1);
+    req.confirmation = Some("confirm-abc".to_owned());
+
+    let error = store.submit(&req, 1, IDLE, T0).unwrap_err();
+
+    assert_eq!(error.code, ErrorCode::RequiresConfirmation);
+}
+
+#[test]
+fn an_expired_challenge_is_refused() {
+    let mut store = OperationStore::new();
+    store.issue_force_stop_challenge("confirm-abc".to_owned(), "node-home", 1, T0);
+    let mut req = request(OperationKind::NodeForceStop, "req-force", 1);
+    req.confirmation = Some("confirm-abc".to_owned());
+
+    let too_late = T0.plus_millis(ForceStopChallenge::TTL_MILLIS + 1);
+    let error = store.submit(&req, 1, IDLE, too_late).unwrap_err();
+
+    assert_eq!(error.code, ErrorCode::RequiresConfirmation);
+}
+
+#[test]
+fn a_challenge_issued_against_an_older_revision_is_refused() {
+    // 確認ダイアログを開いている間に状態が動いたら、確認し直す。
+    let mut store = OperationStore::new();
+    store.issue_force_stop_challenge("confirm-abc".to_owned(), "node-home", 1, T0);
+    let mut req = request(OperationKind::NodeForceStop, "req-force", 2);
+    req.confirmation = Some("confirm-abc".to_owned());
+
+    let error = store.submit(&req, 2, IDLE, T0).unwrap_err();
+
+    assert_eq!(error.code, ErrorCode::RequiresConfirmation);
+}
+
+#[test]
+fn a_force_stop_matching_the_issued_challenge_is_accepted() {
+    let mut store = OperationStore::new();
+    let challenge = store.issue_force_stop_challenge("confirm-abc".to_owned(), "node-home", 1, T0);
+    let mut req = request(OperationKind::NodeForceStop, "req-force", 1);
+    req.confirmation = Some(challenge.token.clone());
 
     let accepted = store.submit(&req, 1, IDLE, T0).unwrap();
 
     assert_eq!(
         store.get(&accepted.operation_id).unwrap().phase,
         OperationPhase::StopSignal
+    );
+    // 使い切る。同じ値で 2 回目の強制停止を通さない。
+    assert!(store.pending_challenge("node-home").is_none());
+}
+
+#[test]
+fn a_consumed_challenge_cannot_authorise_a_second_force_stop() {
+    let mut store = OperationStore::new();
+    let challenge = store.issue_force_stop_challenge("confirm-abc".to_owned(), "node-home", 1, T0);
+    let mut first = request(OperationKind::NodeForceStop, "req-force-1", 1);
+    first.confirmation = Some(challenge.token.clone());
+    store.submit(&first, 1, IDLE, T0).unwrap();
+
+    let mut second = request(OperationKind::NodeForceStop, "req-force-2", 1);
+    second.confirmation = Some(challenge.token);
+
+    assert_eq!(
+        store.submit(&second, 1, IDLE, T0).unwrap_err().code,
+        ErrorCode::RequiresConfirmation
     );
 }
 
@@ -1199,4 +1271,68 @@ fn mock_runners_in_one_scope_do_not_share_a_remote_id() {
             seen.push(key);
         }
     }
+}
+
+// ---- 時計の後方修正 ----------------------------------------------------------
+
+#[test]
+fn an_observation_timestamped_in_the_future_is_not_fresh() {
+    // OS 時計が後方修正されると、古い観測でも経過時間が負になる。壁時計の差を
+    // 信じて Fresh にしない（docs/10 §5 は所要時間に単調時計を使うとしている）。
+    let observed_before_the_clock_jumped = T0.plus_millis(3_600_000);
+
+    let result = freshness::evaluate(
+        ObservationTarget::RemoteVisible,
+        Some(observed_before_the_clock_jumped),
+        T0,
+    );
+
+    assert_eq!(result, ObservationFreshness::Stale);
+}
+
+#[test]
+fn a_node_does_not_report_ready_after_the_clock_moves_backwards() {
+    let mut backend = MockBackend::with_scenario(7, MockScenario::Idle);
+    assert_eq!(backend.snapshot().effective, EffectiveState::Ready);
+
+    backend.advance_millis(-3_600_000);
+
+    assert_eq!(backend.snapshot().effective, EffectiveState::Unknown);
+}
+
+// ---- Mock の強制停止 ---------------------------------------------------------
+
+#[test]
+fn the_mock_refuses_a_force_stop_that_does_not_match_the_issued_challenge() {
+    let mut backend = MockBackend::with_scenario(7, MockScenario::Busy);
+    let revision = backend.revision();
+    backend.issue_force_stop_challenge();
+
+    let error = backend
+        .request_force_stop(&RequestId::from("req-force"), revision, Some("x"))
+        .unwrap_err();
+
+    assert_eq!(error.code, ErrorCode::RequiresConfirmation);
+    assert_eq!(backend.revision(), revision);
+}
+
+#[test]
+fn the_mock_accepts_a_force_stop_matching_the_issued_challenge() {
+    let mut backend = MockBackend::with_scenario(7, MockScenario::Busy);
+    let revision = backend.revision();
+    let challenge = backend.issue_force_stop_challenge();
+
+    let accepted = backend
+        .request_force_stop(
+            &RequestId::from("req-force"),
+            revision,
+            Some(&challenge.token),
+        )
+        .unwrap();
+
+    assert!(accepted.accepted);
+    assert_eq!(
+        backend.operation_phase(&RequestId::from("req-force")),
+        Some(OperationPhase::StopSignal)
+    );
 }

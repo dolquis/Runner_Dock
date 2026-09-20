@@ -26,7 +26,7 @@ use crate::clock::{Clock, FixedClock, UnixMillis};
 use crate::effective::{self, EffectiveInput};
 use crate::events::SequenceSource;
 use crate::freshness::{self, ObservationTarget, VerifiedAt};
-use crate::operation::{OperationRequest, OperationStore, StopReadiness};
+use crate::operation::{ForceStopChallenge, OperationRequest, OperationStore, StopReadiness};
 use crate::remote;
 
 /// Mock が再現する状況。
@@ -195,12 +195,23 @@ impl MockBackend {
         self.submit(OperationKind::NodeStop, request_id, expected_revision, None)
     }
 
-    /// 強制停止を要求する。確認応答が無ければ受理しない。
+    /// 強制停止の確認 challenge を発行する。UI はこの値を確認ダイアログへ出す。
+    ///
+    /// token は Mock なので seed から決定的に導く。実装では OS の乱数を使う。
+    pub fn issue_force_stop_challenge(&mut self) -> ForceStopChallenge {
+        let now = self.clock.now();
+        let token = format!("confirm-{:08x}", mix(self.seed ^ self.revision));
+        let target = self.node_id.0.clone();
+        self.operations
+            .issue_force_stop_challenge(token, &target, self.revision, now)
+    }
+
+    /// 強制停止を要求する。発行済み challenge との完全一致だけを確認済みとみなす。
     ///
     /// # Errors
     ///
-    /// 確認応答が空なら `REQUIRES_CONFIRMATION`、revision がずれていれば
-    /// `REVISION_CONFLICT` を返す。
+    /// challenge が無い・食い違う・期限切れなら `REQUIRES_CONFIRMATION`、revision が
+    /// ずれていれば `REVISION_CONFLICT` を返す。
     pub fn request_force_stop(
         &mut self,
         request_id: &RequestId,

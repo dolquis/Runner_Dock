@@ -45,6 +45,12 @@ impl ObservationTarget {
 ///
 /// `verified_at` は最後に観測へ**成功**した時刻。1 回の観測失敗では更新されないだけで、
 /// それ自体が `Stale` を意味しない。閾値を超えて初めて `Stale` になる。
+///
+/// 経過時間が負のとき、つまり観測時刻が「現在」より後になっているときは `Stale` に
+/// する。OS 時計が後方修正されると壁時計の差は当てにならず、何時間前の観測でも
+/// 負の経過時間として `Fresh` に見えてしまうため。経過時間そのものは単調時計で
+/// 測るのが本来で（`docs/10_IPC_DATA_MODEL.md` §5）、呼び出し側が単調な値を渡せる
+/// ならそちらを使う。ここは壁時計しか無いときの安全側の既定である。
 #[must_use]
 pub fn evaluate(
     target: ObservationTarget,
@@ -55,7 +61,7 @@ pub fn evaluate(
         return ObservationFreshness::NeverObserved;
     };
     let age = now.elapsed_since(verified_at);
-    if age > target.stale_threshold_millis() {
+    if age < 0 || age > target.stale_threshold_millis() {
         ObservationFreshness::Stale
     } else {
         ObservationFreshness::Fresh

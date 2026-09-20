@@ -173,9 +173,11 @@ impl Timestamp {
         &self.0
     }
 
-    /// `YYYY-MM-DDThh:mm:ss[.fff]Z` の形をしているか。
+    /// `YYYY-MM-DDThh:mm:ss[.fff]Z` として妥当か。
     ///
-    /// 暦として妥当かまでは見ない。時差付き表記と現地時刻を弾くのが目的。
+    /// 桁と区切りだけでなく、暦日と時刻の範囲も見る。`2026-99-99T99:99:99Z` のような
+    /// 値を契約として受理すると、後段の日時パーサーや鮮度計算がそこで初めて失敗する。
+    /// 時差付き表記と現地時刻も弾く。
     #[must_use]
     pub fn is_well_formed(text: &str) -> bool {
         let bytes = text.as_bytes();
@@ -196,15 +198,34 @@ impl Timestamp {
         if !separators_ok || !digits_at(&[0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18]) {
             return false;
         }
+
         // 秒の後ろは、そのまま `Z` か、小数点つきの小数秒のみ。
-        match &text[19..text.len() - 1] {
+        let fraction_ok = match &text[19..text.len() - 1] {
             "" => true,
             fraction => {
                 fraction.starts_with('.')
                     && fraction.len() > 1
                     && fraction[1..].bytes().all(|b| b.is_ascii_digit())
             }
+        };
+        if !fraction_ok {
+            return false;
         }
+
+        // 桁数は確認済みなので、ここでの parse は失敗しない。
+        let field = |range: std::ops::Range<usize>| -> u32 {
+            text.get(range)
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(u32::MAX)
+        };
+        let (year, month, day) = (field(0..4), field(5..7), field(8..10));
+        let (hour, minute, second) = (field(11..13), field(14..16), field(17..19));
+
+        if !(1..=12).contains(&month) || day < 1 || day > days_in_month(year, month) {
+            return false;
+        }
+        // 秒は 60 も許す。RFC3339 はうるう秒の表記を認めている。
+        hour <= 23 && minute <= 59 && second <= 60
     }
 }
 
@@ -252,5 +273,21 @@ impl JsonSchema for Timestamp {
             "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
             "description": "UTC の RFC3339 時刻"
         })
+    }
+}
+
+/// その年月の日数。グレゴリオ暦のうるう年規則に従う。
+const fn days_in_month(year: u32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400)) {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 0,
     }
 }
