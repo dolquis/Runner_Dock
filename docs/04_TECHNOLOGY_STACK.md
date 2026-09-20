@@ -48,7 +48,7 @@ RCの便利なbindingを理由に通信契約をツール依存へ固定しま�
 次のファイルで版を固定します。確認値と導入値の対応は[versions](../versions.md)にあります。
 
 ```text
-rust-toolchain.toml     Rust exact version / targets / components
+rust-toolchain.toml     Rust exact version / components / profile
 Cargo.lock              Rust依存の確定値
 package.json            packageManager exact version
 pnpm-lock.yaml          JS依存の確定値

@@ -1,5 +1,10 @@
 packages:
   - "apps/*"
+
+# pnpm の公開直後 cooldown の例外。`pnpm install` が @tauri-apps/cli 2.11.5 を
+# 解決するときに pnpm が自動追加した。版は versions.md の導入値と一致し、
+# --frozen-lockfile の CI では解決自体が起きないため影響しない。cooldown 方針を
+# 決めるときに見直す。
 minimumReleaseAgeExclude:
   - '@tauri-apps/cli-darwin-arm64@2.11.5'
   - '@tauri-apps/cli-darwin-x64@2.11.5'

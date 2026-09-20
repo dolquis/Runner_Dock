@@ -109,5 +109,10 @@ jobs:
       - name: Build frontend
         run: pnpm build
 
+      # Linux job が除外する src-tauri を、ここで -D warnings の検査へ通す。
+      # どの job でも clippy に掛からない crate を残さない。
+      - name: Clippy (desktop shell)
+        run: cargo clippy -p runnerdock-desktop --all-targets --locked -- -D warnings
+
       - name: Test workspace
         run: cargo test --workspace --locked

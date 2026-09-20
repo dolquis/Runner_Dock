@@ -13,6 +13,9 @@ use runnerdock_protocol::{PROTOCOL_VERSION, Peer};
 
 fn main() -> io::Result<()> {
     tracing_subscriber::fmt()
+        // 機械可読な自己申告を stdout へ出すため、診断ログは stderr へ分ける。
+        // guest 側と同じ分離にしておく。
+        .with_writer(io::stderr)
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_env("RUNNERDOCK_LOG")
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),

@@ -36,6 +36,8 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
+`--workspace` は desktop shell の `src-tauri` を含みます。この crate のビルドは `tauri.conf.json` の `frontendDist`（`apps/desktop/dist`）を要求するため、新規 clone では先に `pnpm build` を実行してください。Rust だけを触るときは `-p runnerdock-core -p runnerdock-protocol -p runnerdock-cli -p runnerdock-agent -p runnerdock-guest` のように対象を絞れます。
+
 GitHub 認証、Runner 登録、WSL の変更はいずれのコマンドでも行いません。UI が読むデータは既定で mock で、実接続は `VITE_RUNNERDOCK_DATA_SOURCE=live` の明示指定だけで選ばれます（実接続の実装は後続タスクです）。
 
 Linux では `cargo clippy` と `cargo test` に `--exclude runnerdock-desktop` を付けます。Tauri の shell は WebKitGTK 等の GUI 依存を要するためです。

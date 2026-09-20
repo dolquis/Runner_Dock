@@ -7,7 +7,7 @@
  */
 export type DataSource = "mock" | "live";
 
-/** 出所を選ぶ環境変数名。 */
+/** 出所を選ぶ環境変数名。エラーメッセージ用の表示名であり、値の読取には使わない。 */
 export const DATA_SOURCE_ENV = "VITE_RUNNERDOCK_DATA_SOURCE";
 
 /** 出所の指定が解釈できないときのエラー。 */
@@ -41,7 +41,13 @@ export function resolveDataSource(raw: string | undefined): DataSource {
   throw new UnknownDataSourceError(value);
 }
 
-/** この build が読む出所。 */
+/**
+ * この build が読む出所。
+ *
+ * `import.meta.env` は静的メンバーアクセスで読む。Vite は動的添字を build 時に
+ * 展開しないため、`import.meta.env[DATA_SOURCE_ENV]` と書くと production build
+ * で値が落ち、dev サーバーとだけ挙動が一致する状態になる。
+ */
 export function currentDataSource(): DataSource {
-  return resolveDataSource(import.meta.env[DATA_SOURCE_ENV] as string | undefined);
+  return resolveDataSource(import.meta.env.VITE_RUNNERDOCK_DATA_SOURCE);
 }
