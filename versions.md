@@ -37,7 +37,6 @@ WebView2 と MSVC ビルドツールは OS 側の前提であり、このファ�
 | `tracing` | 0.1.44 | 0.1.44 | 構造化ログ |
 | `tracing-subscriber` | 0.3.23 | 0.3.23 | ログ出力先とフィルタ |
 | `clap` | 4.6.7 | 4.6.7 | CLI の引数解析 |
-| `anyhow` | 1.0.104 | 1.0.104 | 実行ファイル側の最終エラー |
 
 確認元は crates.io の versions API（`https://crates.io/api/v1/crates/<crate>/versions`）で、yank 済みと prerelease を除いた最新安定版である。`tauri` と `tauri-build` は 2 系に限定して取った。
 

@@ -59,7 +59,7 @@ wsl.exe --list --verbose
 | `pnpm dev:mock` | 実GitHub/WSLへ接続せずUIを表示 | LF-001 |
 | `pnpm desktop:dev` | Tauri UIを起動しuser Agentへ接続 | LF-001でUI起動まで。Agent接続はLF-005 |
 | `pnpm lint` | TypeScript、React、禁止APIの検査 | LF-001 |
-| `pnpm test` | UI/Workflowの単体・fixture試験 | LF-001 |
+| `pnpm test` | UIの単体試験 | LF-001でUIのみ。Workflowの純粋関数とfixture試験はLF-014 |
 | `pnpm contracts:check` | Rust由来の契約生成物との差分検査 | LF-002 |
 | `pnpm e2e:mock` | テスト専用Tauri buildのUI E2E | LF-010 |
 
