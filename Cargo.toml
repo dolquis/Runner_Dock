@@ -1,0 +1,41 @@
+# Cargo workspace（docs/03_ARCHITECTURE.md §9「初期モノレポ構成」）。
+# LF-001 では core / protocol / agent / guest / cli と desktop の src-tauri
+# だけを置く。backends / github / storage は後続タスクで追加する。
+[workspace]
+resolver = "3"
+members = [
+    "crates/core",
+    "crates/protocol",
+    "crates/agent",
+    "crates/guest",
+    "crates/cli",
+    "apps/desktop/src-tauri",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/dolquis/Runner_Dock"
+
+# 依存の exact version は versions.md に由来を記録する。crate 側では
+# workspace 継承だけを使い、版をファイルごとに散らさない。
+[workspace.dependencies]
+runnerdock-core = { path = "crates/core" }
+runnerdock-protocol = { path = "crates/protocol" }
+
+clap = { version = "=4.6.7", features = ["derive"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+thiserror = "=2.0.20"
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", features = ["env-filter", "json"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+# docs/15_DEVELOPER_GUIDE.md §5: ユーザー操作・外部 I/O で unwrap しない。
+unwrap_used = "warn"
+expect_used = "warn"

@@ -1,0 +1,19 @@
+# UI ⇄ Agent ⇄ Guest のワイヤー契約の正
+# （docs/10_IPC_DATA_MODEL.md、docs/15_DEVELOPER_GUIDE.md §1）。
+# 秘密そのものを通常 DTO として置かない。
+[package]
+name = "runnerdock-protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

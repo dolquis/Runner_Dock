@@ -1,0 +1,118 @@
+name: build
+
+# workspace のビルドと単体試験。docs/15_DEVELOPER_GUIDE.md §6 に従い、
+# GitHub-hosted Runner だけで動かす。開発中の Runner Dock 自身を CI の
+# 必須実行環境にしない。
+#
+# main への push では再実行しない: PR で検証済みの内容の重複実行であり、
+# required check とブランチ保護を前提にすると検出価値が無いため
+# （フル実行が必要なときは workflow_dispatch）。
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # 純粋ロジックは Linux で検査する。Windows hosted の使用量を抑えるため
+  # だが、必要な Windows 試験を省いて「節約できた」とは扱わない。
+  rust-linux:
+    name: Rust (Linux, core / protocol / agent / guest / cli)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # toolchain は rust-toolchain.toml で固定してある。runner の rustup が
+      # そのファイルを読んで自動導入する。
+      - name: Show toolchain
+        run: |
+          rustc --version
+          cargo --version
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      # desktop の src-tauri は WebKitGTK 等の Linux GUI 依存を要するため
+      # この job では除外する。Windows job でビルドする。
+      - name: Clippy
+        run: cargo clippy --workspace --exclude runnerdock-desktop --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --exclude runnerdock-desktop --locked
+
+  frontend:
+    name: Frontend (lint / test / build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  desktop-windows:
+    name: Desktop shell (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # tauri.conf.json の frontendDist を満たすため、Rust 側より先に作る。
+      - name: Build frontend
+        run: pnpm build
+
+      # Linux job が除外する src-tauri を、ここで -D warnings の検査へ通す。
+      # どの job でも clippy に掛からない crate を残さない。
+      - name: Clippy (desktop shell)
+        run: cargo clippy -p runnerdock-desktop --all-targets --locked -- -D warnings
+
+      - name: Test workspace
+        run: cargo test --workspace --locked

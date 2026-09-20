@@ -19,7 +19,7 @@ Runner Dock は、Windows PC 1 台を Windows ネイティブと WSL2 Ubuntu の
 | Linear 運用 | `docs/linear-conventions.md` |
 | 安全・倫理・ライセンスの人間判断 | `docs/HUMAN_GATES.md` |
 
-矛盾時は受け入れ基準について `docs/02_REQUIREMENTS.md` を優先する。文書段階ではソースコード、Cargo workspace、Node scripts はまだ無い。将来の構成図を既存実装として扱わず、文書中の未実装コマンドが動くとも扱わない。
+矛盾時は受け入れ基準について `docs/02_REQUIREMENTS.md` を優先する。文書中の構成図には repo に無い要素も載っている。図を既存実装として扱わず、動くコマンドは `README.md`「開発コマンド」の範囲に限る。
 
 ## 2. 作業開始と変更方針
 

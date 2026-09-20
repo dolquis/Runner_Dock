@@ -45,4 +45,5 @@ Runner Dock の設計文書の一覧である。文書ごとの役割だけを�
 | [19 根拠資料](19_SOURCES.md) | 一次資料の URL、確認日、用途 |
 | [Human Gate](HUMAN_GATES.md) | AI 単独で確定しない人間判断の登録簿 |
 | [Linear 運用規約](linear-conventions.md) | 共有コア（§1〜§12）と Runner_Dock の Project Delta（§13） |
+| [versions](../versions.md) | ツールチェインと依存の確認値・導入値・選定理由（repo 直下） |
 | [docs 編集規約](AGENTS.md) | このディレクトリのローカル規則。[CLAUDE.md](CLAUDE.md) は Claude Code 向けに同じ規約を import する |
