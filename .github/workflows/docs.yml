@@ -29,7 +29,7 @@ jobs:
       # .pre-commit-config.yaml の crate-ci/typos と揃える。浮動タグ @v1 だと
       # ローカルの pinned rev と判定がずれるため固定版を使う。
       - name: Spell check (typos)
-        uses: crate-ci/typos@v1.50.0
+        uses: crate-ci/typos@v1.50.2
 
       # docs-lint（dolquis/agent-ops origin のベンダリングコピー）。repo 全体を
       # 走査するため差分ゲートを掛けない（走査は git ls-files で数秒）。
