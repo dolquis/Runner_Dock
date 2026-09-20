@@ -1,0 +1,37 @@
+name: gitleaks
+
+# 秘密走査。AGENTS.md「Human Gate と編集禁止対象」が禁じる secret の混入を、
+# セルフレビューの取りこぼしに備えて機械的にも止める。
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# pull_request では action が PR の commit を API で列挙するため
+# pull-requests: read が要る（既定の GITHUB_TOKEN は付与しない）。
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Scan for secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # organization 所有の repo は GITLEAKS_LICENSE secret も要る。
+          # 個人・公開 repo は無しで動く。

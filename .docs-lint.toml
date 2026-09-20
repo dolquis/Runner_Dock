@@ -1,0 +1,17 @@
+# docs-lint の repo 固有設定。既定値は scripts/docs-lint.py にあり、
+# ここには差分だけを置く。設定項目の説明は
+# .claude/skills/doc-governance/references/docs-lint.md を参照。
+#
+# まず設定なしで `python3 scripts/docs-lint.py` を実行し、config / mirror の
+# 指摘を見てから、この repo に必要な項目だけを足す。
+
+# doc-coauthoring は第三者スキル（Apache-2.0）で、Codex 非対応のツールと
+# サブエージェントを前提とするため .agents/ 側に置かない。
+[mirror]
+claude_only = ["doc-coauthoring"]
+
+# [index]
+# file = "docs/README.md"
+
+# [status]
+# exempt = []

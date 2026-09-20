@@ -1,0 +1,46 @@
+name: docs
+
+# 文書ガバナンスの検査。textlint / prh は Node を要するため、この repo が
+# pnpm を持つまで入れていない（AGENTS.md「検証とセルフレビュー」）。
+# main への push では再実行しない: PR で検証済みの内容の重複実行であり、
+# required check とブランチ保護を前提にすると検出価値が無いため
+# （フル実行が必要なときは workflow_dispatch）。
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Docs governance (docs-lint + AGENTS.md budget) + spell check (typos)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # typos は Markdown 以外（コード・コメント・識別子）も対象。版は
+      # .pre-commit-config.yaml の crate-ci/typos と揃える。浮動タグ @v1 だと
+      # ローカルの pinned rev と判定がずれるため固定版を使う。
+      - name: Spell check (typos)
+        uses: crate-ci/typos@v1.50.0
+
+      # docs-lint（dolquis/agent-ops origin のベンダリングコピー）。repo 全体を
+      # 走査するため差分ゲートを掛けない（走査は git ls-files で数秒）。
+      # 判定はベースライン比較で、既存の findings は凍結して増加だけを止める。
+      - name: docs-lint (baseline ratchet)
+        run: python3 scripts/docs-lint.py --baseline .docs-lint-baseline.json
+
+      # AGENTS.md の予算検査（同じく agent-ops origin）。目標 12 KiB 超過は
+      # annotation で可視化し、上限 16 KiB 超過は非 0 終了で PR を止める。
+      - name: Test AGENTS.md size checker
+        run: python3 scripts/tests/test_agent_instruction_size.py
+
+      - name: Enforce AGENTS.md byte budget
+        run: python3 scripts/check_agent_instruction_size.py

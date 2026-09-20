@@ -1,0 +1,17 @@
+{
+  "status": {
+    "AGENTS.md": 3,
+    "README.md": 1,
+    "docs/02_REQUIREMENTS.md": 1,
+    "docs/07_WINDOWS_WSL_BACKENDS.md": 1,
+    "docs/11_UX_SPEC.md": 1,
+    "docs/12_TEST_PLAN.md": 1,
+    "docs/13_ROADMAP.md": 1,
+    "docs/15_DEVELOPER_GUIDE.md": 1,
+    "docs/16_OPERATIONS_RELEASE.md": 1,
+    "docs/17_ADR.md": 1,
+    "docs/18_REFERENCE_REVIEW.md": 1,
+    "docs/19_SOURCES.md": 2,
+    "docs/20_TRACEABILITY.md": 1
+  }
+}

@@ -1,0 +1,64 @@
+# Pre-commit hooks — AGENTS.md「検証とセルフレビュー」のゲートを commit 前に回す。
+# ホストごとの導入:
+#   uv tool install pre-commit   # または: pipx install pre-commit
+#   pre-commit install
+minimum_pre_commit_version: "3.5.0"
+
+# ベンダリングした資産（origin: dolquis/agent-ops。この repo では編集しない）:
+# docs/linear-conventions.md と .claude/skills/ .agents/skills/ と
+# .claude/hooks/post-edit-docs-lint.py、scripts/ の検査器は、整形系フック
+# （trailing-whitespace / end-of-file-fixer）からだけ除外する。secret と巨大
+# ファイルの検査は、紛れ込みを取り逃さないよう全ファイルに掛ける。
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '(^\.claude/skills/|^\.agents/skills/|^\.claude/hooks/|^scripts/(docs-lint\.py|check_agent_instruction_size\.py|tests/)|^docs/linear-conventions\.md$)'
+      - id: end-of-file-fixer
+        exclude: '(^\.claude/skills/|^\.agents/skills/|^\.claude/hooks/|^scripts/(docs-lint\.py|check_agent_instruction_size\.py|tests/)|^docs/linear-conventions\.md$)'
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # コード・英語コメント・識別子のタイプミス検出。版は
+  # .github/workflows/docs.yml の crate-ci/typos と揃える。ずれるとローカルと
+  # CI で判定が食い違う。
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.50.0
+    hooks:
+      - id: typos
+
+  # GitHub Actions workflow の lint。式のタイプミスは実 CI でしか表面化しない。
+  # shellcheck / pyflakes 連携はフックを速く保つため無効にする。
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+        args: ["-shellcheck=", "-pyflakes="]
+
+  # 文書ガバナンス（ベンダリングした検査器。CI と同じ判定をローカルで回す）
+  - repo: local
+    hooks:
+      - id: docs-lint
+        name: docs-lint (baseline ratchet)
+        entry: python3 scripts/docs-lint.py --baseline .docs-lint-baseline.json
+        language: system
+        pass_filenames: false
+        files: '\.md$'
+      - id: agents-md-budget
+        name: AGENTS.md byte budget
+        entry: python3 scripts/check_agent_instruction_size.py
+        language: system
+        pass_filenames: false
+        files: '^AGENTS\.md$'
