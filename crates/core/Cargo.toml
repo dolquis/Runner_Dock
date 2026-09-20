@@ -1,0 +1,18 @@
+[package]
+name = "runnerdock-core"
+version = "0.1.0"
+description = "Runner Dock の純粋ドメイン。状態解釈、Operation、イベント適用、Mock Backend"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# core は Tauri、WSL コマンド、GitHub HTTP クライアントに依存しない
+# （AGENTS.md §5.2）。実行・時計・秘密情報・保存先はインターフェースで注入する。
+[dependencies]
+runnerdock-protocol = { path = "../protocol" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,24 @@
+# Rust workspace のルート。LF-002 では core / protocol だけを member にする。
+# desktop / agent / guest / backends などの crate は LF-001 と後続タスクが足す。
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/protocol"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/dolquis/Runner_Dock"
+
+[workspace.dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+schemars = "1.2.2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"

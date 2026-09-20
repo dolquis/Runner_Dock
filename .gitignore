@@ -12,3 +12,6 @@
 .env
 .env.*
 !.env.example
+
+# Rust ビルド成果物
+target/
