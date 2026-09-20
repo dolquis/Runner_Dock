@@ -161,6 +161,43 @@ mod tests {
     }
 
     #[test]
+    fn a_dto_tolerates_a_field_added_by_a_newer_minor() {
+        // minor 追加は unknown field 許容で互換性を保つ（docs/10 §9）。既知の項目
+        // だけを読んで動き続ける。
+        let payload = json!({
+            "runnerId": "runner-1",
+            "backendId": "backend-1",
+            "scopeId": "scope-1",
+            "desired": "running",
+            "local": "running",
+            "localFreshness": "fresh",
+            "remotePresence": "registered",
+            "remoteAvailability": "online_idle",
+            "remoteFreshness": "fresh",
+            "remoteErrorCode": null,
+            "remoteRunnerId": "41",
+            "verifiedAt": "2026-09-20T00:00:00.000Z",
+            "lastKnownAvailability": null,
+            "effective": "ready",
+            "somethingAddedLater": {"nested": true}
+        });
+
+        let observation: dto::RunnerObservation = serde_json::from_value(payload).unwrap();
+
+        assert_eq!(observation.effective, dto::EffectiveState::Ready);
+        assert_eq!(observation.remote_runner_id, Some(ids::DecimalU64::new(41)));
+    }
+
+    #[test]
+    fn an_unknown_enum_value_is_rejected_rather_than_guessed() {
+        // 未知 field は許容するが、既知 field の未知の値は推測しない。
+        let payload = json!({"code": "SOMETHING_NEW", "messageKey": "k", "retryable": false,
+                             "requiresConfirmation": false, "operationId": null});
+
+        assert!(serde_json::from_value::<error::ErrorPayload>(payload).is_err());
+    }
+
+    #[test]
     fn decimal_u64_crosses_the_wire_as_a_string() {
         // JavaScript の number では失われる桁を保つ。
         let large = DecimalU64::new(9_007_199_254_740_993);

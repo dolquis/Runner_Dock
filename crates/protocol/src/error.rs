@@ -32,7 +32,7 @@ pub enum ErrorCode {
 
 /// ワイヤー上のエラー payload。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct ErrorPayload {
     pub code: ErrorCode,
     /// UI 側の翻訳キー。表示文字列そのものではない。

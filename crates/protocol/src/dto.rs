@@ -2,6 +2,10 @@
 //!
 //! 不明値は `null` か明示 enum にし、`0` や `false` へ置換しない
 //! （`docs/10_IPC_DATA_MODEL.md` §5）。秘密本体はここに載せない。
+//!
+//! DTO は未知フィールドを許容する。minor 追加で項目が増えた相手と接続しても、
+//! 既知の項目だけを読んで動き続けるため（同 §9）。拒否するのは未知のメッセージ種別と
+//! major 不一致で、これはフレーム復号が担う。
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -99,7 +103,7 @@ pub enum ScopeKind {
 
 /// 1 つの Runner についての観測一式。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct RunnerObservation {
     pub runner_id: RunnerId,
     pub backend_id: BackendId,
@@ -123,7 +127,7 @@ pub struct RunnerObservation {
 
 /// Node と配下 Runner の観測。秘密は含めない。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct NodeSnapshot {
     pub node_id: NodeId,
     pub display_name: String,
@@ -137,7 +141,7 @@ pub struct NodeSnapshot {
 
 /// 秘密本体を含まない資格情報の表示用ビュー。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct CredentialRefView {
     pub credential_ref_id: CredentialRefId,
     /// 用途。ローカル管理用と Workflow 監視用を混同しない。
@@ -193,7 +197,7 @@ impl OperationPhase {
 
 /// Operation の観測。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct OperationSnapshot {
     pub operation_id: OperationId,
     pub kind: OperationKind,
@@ -208,7 +212,7 @@ pub struct OperationSnapshot {
 
 /// Operation 内の個別の失敗。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct OperationFailure {
     pub backend_id: Option<BackendId>,
     pub code: ErrorCode,
@@ -217,7 +221,7 @@ pub struct OperationFailure {
 
 /// `node.start` / `node.stop` の要求 payload。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct NodeOperationRequest {
     pub node_id: NodeId,
     /// 直前に読んだ snapshot の revision。ずれていれば `REVISION_CONFLICT`。
@@ -226,7 +230,7 @@ pub struct NodeOperationRequest {
 
 /// 強制停止の要求 payload。確認 challenge を必須にする。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct ForceStopRequest {
     pub node_id: NodeId,
     pub expected_revision: DecimalU64,
@@ -236,7 +240,7 @@ pub struct ForceStopRequest {
 
 /// 要求を受け付けたという応答。完了ではない。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct OperationAccepted {
     pub operation_id: OperationId,
     pub accepted: bool,
@@ -246,7 +250,7 @@ pub struct OperationAccepted {
 
 /// handshake の応答。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct HandshakeResult {
     pub protocol_major: u32,
     pub implementation_version: String,

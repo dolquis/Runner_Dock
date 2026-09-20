@@ -13,7 +13,6 @@
       "type": "string"
     },
     "CredentialRefView": {
-      "additionalProperties": false,
       "description": "秘密本体を含まない資格情報の表示用ビュー。",
       "properties": {
         "credentialRefId": {
@@ -136,7 +135,6 @@
       ]
     },
     "ErrorPayload": {
-      "additionalProperties": false,
       "description": "ワイヤー上のエラー payload。",
       "properties": {
         "code": {
@@ -228,7 +226,6 @@
       ]
     },
     "ForceStopRequest": {
-      "additionalProperties": false,
       "description": "強制停止の要求 payload。確認 challenge を必須にする。",
       "properties": {
         "confirmation": {
@@ -252,7 +249,6 @@
       "type": "object"
     },
     "HandshakeResult": {
-      "additionalProperties": false,
       "description": "handshake の応答。",
       "properties": {
         "agentGeneration": {
@@ -371,7 +367,6 @@
       "type": "string"
     },
     "NodeOperationRequest": {
-      "additionalProperties": false,
       "description": "`node.start` / `node.stop` の要求 payload。",
       "properties": {
         "expectedRevision": {
@@ -389,7 +384,6 @@
       "type": "object"
     },
     "NodeSnapshot": {
-      "additionalProperties": false,
       "description": "Node と配下 Runner の観測。秘密は含めない。",
       "properties": {
         "displayName": {
@@ -436,7 +430,6 @@
       "type": "string"
     },
     "OperationAccepted": {
-      "additionalProperties": false,
       "description": "要求を受け付けたという応答。完了ではない。",
       "properties": {
         "accepted": {
@@ -458,7 +451,6 @@
       "type": "object"
     },
     "OperationFailure": {
-      "additionalProperties": false,
       "description": "Operation 内の個別の失敗。",
       "properties": {
         "backendId": {
@@ -533,7 +525,6 @@
       ]
     },
     "OperationSnapshot": {
-      "additionalProperties": false,
       "description": "Operation の観測。",
       "properties": {
         "failures": {
@@ -671,7 +662,6 @@
       "type": "string"
     },
     "RunnerObservation": {
-      "additionalProperties": false,
       "description": "1 つの Runner についての観測一式。",
       "properties": {
         "backendId": {
