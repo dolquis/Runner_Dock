@@ -14,10 +14,10 @@ pub mod message;
 pub mod method;
 
 /// 現在の protocol major。不一致のメッセージは復号段階で拒否する。
+///
+/// SQLite schema の版は、migration を持つ `crates/storage` 側で定義する。
+/// ワイヤー契約と保存形式は別の互換性単位なので、ここに並べない。
 pub const PROTOCOL_MAJOR: u32 = 1;
-
-/// SQLite schema の版。migration の対象。
-pub const DB_SCHEMA_VERSION: u32 = 1;
 
 #[cfg(test)]
 mod tests {
