@@ -15,6 +15,9 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        # Markdown の行末 2 スペースは強制改行として意味を持つ。
+        # 既定のままだと docs/19_SOURCES.md 等の改行が段落へ潰れる。
+        args: ["--markdown-linebreak-ext=md"]
         exclude: '(^\.claude/skills/|^\.agents/skills/|^\.claude/hooks/|^scripts/(docs-lint\.py|check_agent_instruction_size\.py|tests/)|^docs/linear-conventions\.md$)'
       - id: end-of-file-fixer
         exclude: '(^\.claude/skills/|^\.agents/skills/|^\.claude/hooks/|^scripts/(docs-lint\.py|check_agent_instruction_size\.py|tests/)|^docs/linear-conventions\.md$)'
