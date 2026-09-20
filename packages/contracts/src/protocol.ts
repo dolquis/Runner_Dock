@@ -51,7 +51,7 @@ export type EffectiveState = "busy" | "unknown" | "ready" | "disconnected" | "re
 /**
  * 機械判定用のエラー code。日本語訳を変えても動作が変わらないようにする。
  */
-export type ErrorCode = "PERMISSION_OR_POLICY" | "RATE_LIMITED" | "RUNNER_BUSY" | "PROTOCOL_MISMATCH" | "REQUIRES_CONFIRMATION" | "CHECKSUM_MISMATCH" | "WSL_GUEST_UNREACHABLE" | "AUTH_EXPIRED" | "STATUS_STALE" | "PATH_NOT_OWNED" | "REVISION_CONFLICT";
+export type ErrorCode = "PERMISSION_OR_POLICY" | "RATE_LIMITED" | "RUNNER_BUSY" | "PROTOCOL_MISMATCH" | "REQUIRES_CONFIRMATION" | "CHECKSUM_MISMATCH" | "WSL_GUEST_UNREACHABLE" | "AUTH_EXPIRED" | "STATUS_STALE" | "PATH_NOT_OWNED" | "REVISION_CONFLICT" | "REQUEST_ID_CONFLICT";
 
 /**
  * ワイヤー上のエラー payload。
@@ -101,7 +101,7 @@ export interface ForceStopRequest {
    * UI が提示した確認 challenge の応答。`null` なら受理しない。
    */
   readonly confirmation?: string | null;
-  readonly expectedRevision: DecimalU64;
+  readonly expectedRevision: number;
   readonly nodeId: NodeId;
 }
 
@@ -151,7 +151,7 @@ export interface NodeOperationRequest {
   /**
    * 直前に読んだ snapshot の revision。ずれていれば `REVISION_CONFLICT`。
    */
-  readonly expectedRevision: DecimalU64;
+  readonly expectedRevision: number;
   readonly nodeId: NodeId;
 }
 
@@ -168,8 +168,11 @@ export interface NodeSnapshot {
   readonly observedAt: Timestamp;
   /**
    * 楽観ロック用。`node.start` 等の `expectedRevision` と照合する。
+   *
+   * GitHub ID や event sequence と違い、10 進文字列にしない。§5 が文字列を課すのは
+   * その 2 つで、revision は Agent が採番する小さな連番であり、§3 の例も数値で書く。
    */
-  readonly revision: DecimalU64;
+  readonly revision: number;
   readonly runners: readonly RunnerObservation[];
 }
 
@@ -185,8 +188,11 @@ export interface OperationAccepted {
   readonly accepted: boolean;
   /**
    * 同じ `requestId` の再送で既存 Operation へ収束した場合に `true`。
+   *
+   * 省略は「収束していない」を意味する。§3 の応答例がこの項目を持たないため、
+   * 既定値を認めて例がそのまま復号できるようにする。
    */
-  readonly deduplicated: boolean;
+  readonly deduplicated?: boolean;
   readonly operationId: OperationId;
 }
 
@@ -321,6 +327,6 @@ export interface RunnerObservation {
 export type ScopeId = string;
 
 /**
- * UTC の RFC3339 時刻。
+ * UTC の RFC3339 時刻
  */
 export type Timestamp = string;

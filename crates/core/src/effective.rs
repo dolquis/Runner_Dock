@@ -3,7 +3,7 @@
 //! 観測が古い・未知・API 障害のときに緑（`Ready`）を出さないことがこの module の役割。
 
 use runnerdock_protocol::dto::{
-    EffectiveState, LocalRuntime, ObservationFreshness, RemoteAvailability, RemotePresence,
+    EffectiveState, LocalRuntime, ObservationFreshness, RemoteAvailability,
 };
 use runnerdock_protocol::error::ErrorCode;
 
@@ -11,8 +11,8 @@ use runnerdock_protocol::error::ErrorCode;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EffectiveInput {
     pub local: LocalRuntime,
+    /// ローカル観測の鮮度。remote と同じく、古ければ現在の事実として扱わない。
     pub local_freshness: ObservationFreshness,
-    pub remote_presence: RemotePresence,
     pub remote_availability: RemoteAvailability,
     pub remote_freshness: ObservationFreshness,
     /// 観測できなかった理由。丸めずに渡す。
@@ -24,8 +24,8 @@ pub struct EffectiveInput {
 /// 併記すべき矛盾。状態そのものを書き換えずに警告として持つ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Conflict {
-    /// GitHub は Busy と言っているのにローカルプロセスを見失っている。
-    BusyWhileLocalLost,
+    /// GitHub は Busy と言っているのに、ローカルでは動いていない。
+    BusyWhileLocalNotRunning,
     /// ローカルは停止しているのに GitHub からは Idle に見える。
     LocalStoppedWhileRemoteIdle,
 }
@@ -40,6 +40,10 @@ pub struct EffectiveVerdict {
 }
 
 /// Runner 1 件の有効状態を決める。
+///
+/// `remote_presence` は判定に使わない。`docs/05_DOMAIN_STATE.md` §4 の表は Local
+/// 観測・remote の可用性・鮮度・API 障害だけで行を決めており、登録の有無は別に
+/// 表示する情報だからである。
 #[must_use]
 pub fn evaluate_runner(input: &EffectiveInput) -> EffectiveVerdict {
     let fallback = input.last_known_availability;
@@ -47,6 +51,7 @@ pub fn evaluate_runner(input: &EffectiveInput) -> EffectiveVerdict {
     // 観測手段そのものが失われている場合を先に見る。Runner が落ちたと断定しない。
     if matches!(input.remote_error_code, Some(ErrorCode::AuthExpired))
         && input.local == LocalRuntime::Running
+        && input.local_freshness == ObservationFreshness::Fresh
     {
         return EffectiveVerdict {
             state: EffectiveState::MonitoringUnavailable,
@@ -55,8 +60,10 @@ pub fn evaluate_runner(input: &EffectiveInput) -> EffectiveVerdict {
         };
     }
 
-    // 古い観測・未知の値を現在の事実として扱わない。
-    if input.remote_freshness != ObservationFreshness::Fresh
+    // 古い観測・未知の値を現在の事実として扱わない。ローカル側の鮮度も同じ。
+    // Agent 再起動直後の古い Local 状態を緑にしないため（同 §7）。
+    if input.local_freshness != ObservationFreshness::Fresh
+        || input.remote_freshness != ObservationFreshness::Fresh
         || input.remote_availability == RemoteAvailability::Unknown
     {
         return EffectiveVerdict {
@@ -67,9 +74,13 @@ pub fn evaluate_runner(input: &EffectiveInput) -> EffectiveVerdict {
     }
 
     match (input.local, input.remote_availability) {
-        (LocalRuntime::Lost, RemoteAvailability::OnlineBusy) => EffectiveVerdict {
+        // Lost だけでなく Stopped / Error も同程度に矛盾している。
+        (
+            LocalRuntime::Lost | LocalRuntime::Stopped | LocalRuntime::Error,
+            RemoteAvailability::OnlineBusy,
+        ) => EffectiveVerdict {
             state: EffectiveState::Busy,
-            conflict: Some(Conflict::BusyWhileLocalLost),
+            conflict: Some(Conflict::BusyWhileLocalNotRunning),
             last_known_availability: fallback,
         },
         (_, RemoteAvailability::OnlineBusy) => EffectiveVerdict {

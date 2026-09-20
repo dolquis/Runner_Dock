@@ -6,7 +6,7 @@
 use std::collections::VecDeque;
 
 use runnerdock_protocol::ids::{AgentGeneration, DecimalU64};
-use runnerdock_protocol::message::Event;
+use runnerdock_protocol::message::{Event, EventKind};
 
 /// 1 件の event を適用した結果。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,13 +96,16 @@ pub enum PushOutcome {
 
 /// 購読者ごとの上限付きキュー。
 ///
-/// 満杯でも送信側を待たせない。重要状態イベントを落としたら `ResyncRequired` を
-/// 送る必要があることを [`needs_resync`](Self::needs_resync) で伝える。
+/// 満杯でも送信側を待たせない。落としたものの扱いは `docs/10_IPC_DATA_MODEL.md` §9 に
+/// 従って 2 つに分ける。重要状態イベントを落としたら `ResyncRequired` を送る必要が
+/// あり（[`needs_resync`](Self::needs_resync)）、ログを間引いた場合は件数を表示する
+/// （[`dropped_logs`](Self::dropped_logs)）。ログ 1 件の欠落で snapshot を取り直さない。
 #[derive(Debug, Clone)]
 pub struct SubscriberQueue {
     capacity: usize,
     items: VecDeque<Event>,
-    dropped: u64,
+    dropped_state: u64,
+    dropped_logs: u64,
 }
 
 impl SubscriberQueue {
@@ -112,16 +115,22 @@ impl SubscriberQueue {
         Self {
             capacity: capacity.max(1),
             items: VecDeque::new(),
-            dropped: 0,
+            dropped_state: 0,
+            dropped_logs: 0,
         }
     }
 
     /// event を 1 件入れる。満杯なら新しい方を落とす。
     pub fn push(&mut self, event: Event) -> PushOutcome {
         if self.items.len() >= self.capacity {
-            self.dropped += 1;
+            // ログの間引きと状態の取りこぼしを別々に数える。
+            if event.event == EventKind::LogAppended {
+                self.dropped_logs += 1;
+            } else {
+                self.dropped_state += 1;
+            }
             return PushOutcome::Dropped {
-                total_dropped: self.dropped,
+                total_dropped: self.dropped_state + self.dropped_logs,
             };
         }
         self.items.push_back(event);
@@ -143,21 +152,37 @@ impl SubscriberQueue {
         self.items.is_empty()
     }
 
-    /// 累計の欠落件数。UI へ件数として表示する。
+    /// 落とした状態イベントの累計。
+    #[must_use]
+    pub const fn dropped_state(&self) -> u64 {
+        self.dropped_state
+    }
+
+    /// 間引いたログの累計。UI へ件数として表示する。
+    #[must_use]
+    pub const fn dropped_logs(&self) -> u64 {
+        self.dropped_logs
+    }
+
+    /// 落とした累計（状態とログの合計）。
     #[must_use]
     pub const fn dropped(&self) -> u64 {
-        self.dropped
+        self.dropped_state + self.dropped_logs
     }
 
-    /// 1 件でも落としたか。落としていれば snapshot へ戻す必要がある。
+    /// 状態イベントを落としたか。落としていれば snapshot へ戻す必要がある。
+    ///
+    /// ログだけを間引いた場合は真にしない。件数表示で足りるため。
     #[must_use]
     pub const fn needs_resync(&self) -> bool {
-        self.dropped > 0
+        self.dropped_state > 0
     }
 
-    /// snapshot を送り直したので欠落の記録を消す。
-    pub fn clear_resync(&mut self) {
-        self.dropped = 0;
+    /// snapshot を送り直したので状態イベントの欠落記録を消す。
+    ///
+    /// ログの間引き件数は snapshot では埋まらないので残す。
+    pub const fn clear_resync(&mut self) {
+        self.dropped_state = 0;
     }
 }
 

@@ -16,9 +16,14 @@ serde_json = "1.0.151"
 schemars = "1.2.2"
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+# forbid ではなく deny。AGENTS.md §5.2 は unsafe を OS 連携へ閉じ込めたうえで理由と
+# 不変条件を付けることを認めており、windows-rs を使う crate では crate 単位の
+# allow が要る。forbid は上書きできない。
+unsafe_code = "deny"
 
 [workspace.lints.clippy]
-unwrap_used = "deny"
-expect_used = "deny"
-panic = "deny"
+# warn に留め、CI の `-D warnings` で止める。テストは lib 側の
+# `#![cfg_attr(test, allow(...))]` で除く。
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"

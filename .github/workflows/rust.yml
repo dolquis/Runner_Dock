@@ -15,7 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # ローカルで検証した stable。rust-toolchain.toml が入ったらそちらへ寄せる。
+  # ローカルで検証した stable。LF-001 が rust-toolchain.toml を入れたら、rustup が
+  # そちらを読むのでこの job の明示固定と契約生成物の step は build.yml へ寄せる。
   RUST_TOOLCHAIN: 1.98.0
   CARGO_TERM_COLOR: always
 

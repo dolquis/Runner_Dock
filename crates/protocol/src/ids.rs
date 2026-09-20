@@ -159,7 +159,98 @@ string_id!(
     /// Agent の世代。Agent が再起動すると変わり、旧世代の event を捨てるのに使う。
     AgentGeneration
 );
-string_id!(
-    /// UTC の RFC3339 時刻。
-    Timestamp
-);
+/// UTC の RFC3339 時刻（`docs/10_IPC_DATA_MODEL.md` §5）。
+///
+/// 境界で形式を検査する。相手が別の形式や現地時刻を送ってきたときに、黙って
+/// 取り込んで鮮度計算を狂わせないため。
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct Timestamp(pub String);
+
+impl Timestamp {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// `YYYY-MM-DDThh:mm:ss[.fff]Z` の形をしているか。
+    ///
+    /// 暦として妥当かまでは見ない。時差付き表記と現地時刻を弾くのが目的。
+    #[must_use]
+    pub fn is_well_formed(text: &str) -> bool {
+        let bytes = text.as_bytes();
+        // 最短は "1970-01-01T00:00:00Z" の 20 バイト。
+        if bytes.len() < 20 || !text.ends_with('Z') {
+            return false;
+        }
+        let digits_at = |positions: &[usize]| {
+            positions
+                .iter()
+                .all(|&i| bytes.get(i).is_some_and(u8::is_ascii_digit))
+        };
+        let separators_ok = bytes[4] == b'-'
+            && bytes[7] == b'-'
+            && bytes[10] == b'T'
+            && bytes[13] == b':'
+            && bytes[16] == b':';
+        if !separators_ok || !digits_at(&[0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18]) {
+            return false;
+        }
+        // 秒の後ろは、そのまま `Z` か、小数点つきの小数秒のみ。
+        match &text[19..text.len() - 1] {
+            "" => true,
+            fraction => {
+                fraction.starts_with('.')
+                    && fraction.len() > 1
+                    && fraction[1..].bytes().all(|b| b.is_ascii_digit())
+            }
+        }
+    }
+}
+
+impl From<&str> for Timestamp {
+    fn from(value: &str) -> Self {
+        Self(value.to_owned())
+    }
+}
+
+impl From<String> for Timestamp {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl fmt::Display for Timestamp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for Timestamp {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        if Self::is_well_formed(&text) {
+            Ok(Self(text))
+        } else {
+            Err(de::Error::invalid_value(
+                de::Unexpected::Str(&text),
+                &"UTC の RFC3339 時刻（例 2026-09-20T00:00:00.000Z）",
+            ))
+        }
+    }
+}
+
+impl JsonSchema for Timestamp {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Timestamp".into()
+    }
+
+    fn json_schema(_generator: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+            "description": "UTC の RFC3339 時刻"
+        })
+    }
+}

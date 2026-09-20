@@ -131,6 +131,11 @@
           "const": "REVISION_CONFLICT",
           "description": "`expectedRevision` が現在値と食い違う。",
           "type": "string"
+        },
+        {
+          "const": "REQUEST_ID_CONFLICT",
+          "description": "受理済みの `requestId` が、別の操作のために使い回された。\n\n`docs/10_IPC_DATA_MODEL.md` §8 は「主な code」を列挙する形なので、その一覧へ\n足す追加として扱う。冪等キーの一致だけで再送とみなすと、確認や revision の\nゲートを迂回できてしまうため、一致しない使い回しは明示的に拒否する。",
+          "type": "string"
         }
       ]
     },
@@ -236,7 +241,9 @@
           ]
         },
         "expectedRevision": {
-          "$ref": "#/$defs/DecimalU64"
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
         },
         "nodeId": {
           "$ref": "#/$defs/NodeId"
@@ -370,8 +377,10 @@
       "description": "`node.start` / `node.stop` の要求 payload。",
       "properties": {
         "expectedRevision": {
-          "$ref": "#/$defs/DecimalU64",
-          "description": "直前に読んだ snapshot の revision。ずれていれば `REVISION_CONFLICT`。"
+          "description": "直前に読んだ snapshot の revision。ずれていれば `REVISION_CONFLICT`。",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
         },
         "nodeId": {
           "$ref": "#/$defs/NodeId"
@@ -400,8 +409,10 @@
           "$ref": "#/$defs/Timestamp"
         },
         "revision": {
-          "$ref": "#/$defs/DecimalU64",
-          "description": "楽観ロック用。`node.start` 等の `expectedRevision` と照合する。"
+          "description": "楽観ロック用。`node.start` 等の `expectedRevision` と照合する。\n\nGitHub ID や event sequence と違い、10 進文字列にしない。§5 が文字列を課すのは\nその 2 つで、revision は Agent が採番する小さな連番であり、§3 の例も数値で書く。",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
         },
         "runners": {
           "items": {
@@ -436,7 +447,8 @@
           "type": "boolean"
         },
         "deduplicated": {
-          "description": "同じ `requestId` の再送で既存 Operation へ収束した場合に `true`。",
+          "default": false,
+          "description": "同じ `requestId` の再送で既存 Operation へ収束した場合に `true`。\n\n省略は「収束していない」を意味する。§3 の応答例がこの項目を持たないため、\n既定値を認めて例がそのまま復号できるようにする。",
           "type": "boolean"
         },
         "operationId": {
@@ -445,8 +457,7 @@
       },
       "required": [
         "operationId",
-        "accepted",
-        "deduplicated"
+        "accepted"
       ],
       "type": "object"
     },
@@ -758,7 +769,9 @@
       "type": "string"
     },
     "Timestamp": {
-      "description": "UTC の RFC3339 時刻。",
+      "description": "UTC の RFC3339 時刻",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
       "type": "string"
     }
   },

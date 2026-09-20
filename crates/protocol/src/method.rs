@@ -95,6 +95,8 @@ impl Method {
                 | Self::AuthLogout
                 | Self::CredentialImport
                 | Self::SettingsApply
+                // 診断 ZIP をディスクへ書く。出力先確認を伴うので読取扱いにしない。
+                | Self::LogsExport
         )
     }
 }

@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 
 use runnerdock_protocol::dto::{
-    DesiredState, OperationAccepted, OperationFailure, OperationKind, OperationPhase,
-    OperationSnapshot, RemoteAvailability,
+    OperationAccepted, OperationFailure, OperationKind, OperationPhase, OperationSnapshot,
+    RemoteAvailability,
 };
 use runnerdock_protocol::error::{ErrorCode, ErrorPayload};
 use runnerdock_protocol::ids::{DecimalU64, OperationId, RequestId};
@@ -106,11 +106,21 @@ impl OperationStore {
         readiness: StopReadiness,
         now: UnixMillis,
     ) -> Result<OperationAccepted, ErrorPayload> {
-        // 冪等キーの照合を最初に行う。再送で revision 照合に落ちて、受理済みの
-        // Operation が見えなくなる事態を避ける。
-        if let Some(existing) = self.by_request.get(&request.request_id) {
+        // 冪等キーの照合を最初に行う。受理後に revision が進むため、これを後ろへ
+        // 置くと正当な再送が `REVISION_CONFLICT` で落ちる。
+        //
+        // ただし「同じ鍵」だけでは再送と認めない。kind と対象が違う要求を再送として
+        // 通すと、確認や revision のゲートを鍵の使い回しで迂回できてしまう。
+        if let Some(existing_id) = self.by_request.get(&request.request_id) {
+            let existing = self.records.get(existing_id);
+            let is_same_request = existing.is_some_and(|record| {
+                record.kind == request.kind && record.target_id == request.target_id
+            });
+            if !is_same_request {
+                return Err(ErrorPayload::new(ErrorCode::RequestIdConflict));
+            }
             return Ok(OperationAccepted {
-                operation_id: existing.clone(),
+                operation_id: existing_id.clone(),
                 accepted: true,
                 deduplicated: true,
             });
@@ -132,6 +142,10 @@ impl OperationStore {
                 .is_none_or(|value| value.trim().is_empty())
         {
             // API が不明な場合も確認なしの停止へ進めない。
+            //
+            // ここは「空でない応答があるか」までしか見ない。challenge を Agent 側で
+            // 発行して照合する経路は IPC を実装する LF-005 の範囲で、この段階では
+            // 確認を省略できないことだけを保証する。
             return Err(ErrorPayload::new(ErrorCode::RequiresConfirmation));
         }
 
@@ -160,26 +174,37 @@ impl OperationStore {
     }
 
     /// 登録応答で得た remote ID を記録する。ローカル保存より前に呼ぶ。
+    ///
+    /// 段階は動かさない。`Registering` の次に `Starting` を経てから `Verifying` へ
+    /// 進むのは呼び出し側の責務で（`docs/05_DOMAIN_STATE.md` §5）、ここで飛ばすと
+    /// 遷移図に無い経路ができる。
     pub fn record_registration(&mut self, operation_id: &OperationId, remote_id: DecimalU64) {
         if let Some(record) = self.records.get_mut(operation_id) {
             record.registered_remote_id = Some(remote_id);
-            record.phase = OperationPhase::Verifying;
         }
     }
 
     /// 段階を進める。
+    ///
+    /// 終端に達した Operation は動かさない。結果を記録したあとに巻き戻すと、
+    /// 完了した操作が再び進行中に見える。
     pub fn set_phase(
         &mut self,
         operation_id: &OperationId,
         phase: OperationPhase,
         now: UnixMillis,
-    ) {
-        if let Some(record) = self.records.get_mut(operation_id) {
-            record.phase = phase;
-            if phase.is_terminal() {
-                record.finished_at = Some(now);
-            }
+    ) -> bool {
+        let Some(record) = self.records.get_mut(operation_id) else {
+            return false;
+        };
+        if record.phase.is_terminal() {
+            return false;
         }
+        record.phase = phase;
+        if phase.is_terminal() {
+            record.finished_at = Some(now);
+        }
+        true
     }
 
     /// 片側の失敗を記録する。成功側を巻き戻さない。
@@ -225,14 +250,4 @@ fn initial_phase(kind: OperationKind, readiness: StopReadiness) -> OperationPhas
         // 確認済みの強制停止。idle 待ちをしない代わりに中断の可能性を UI が示す。
         OperationKind::NodeForceStop => OperationPhase::StopSignal,
     }
-}
-
-/// 希望状態と進行中の段階を同時に持つ表示用の組。
-///
-/// 停止要求後に Busy で未停止なら、`desired=Stopped` / `phase=WaitingForIdle` /
-/// `local=Running` を同時に出す（`docs/05_DOMAIN_STATE.md` §2）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IntentView {
-    pub desired: DesiredState,
-    pub phase: Option<OperationPhase>,
 }

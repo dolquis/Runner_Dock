@@ -55,6 +55,58 @@ mod tests {
     }
 
     #[test]
+    fn decode_consumes_only_one_frame_when_more_bytes_follow() {
+        // buffer に次のフレームの先頭が続いていても、1 件分だけ取り除く。
+        let first = encode(&Message::Event(Event::new(
+            DecimalU64::new(1),
+            "gen".into(),
+            EventKind::ResyncRequired,
+            json!({}),
+        )))
+        .unwrap();
+        let second = encode(&Message::Event(Event::new(
+            DecimalU64::new(2),
+            "gen".into(),
+            EventKind::OperationChanged,
+            json!({}),
+        )))
+        .unwrap();
+        let mut buffer = first.clone();
+        buffer.extend_from_slice(&second);
+
+        let DecodeOutcome::Decoded { consumed, .. } = decode(&buffer).unwrap() else {
+            panic!("1 件目を復号できなかった");
+        };
+
+        assert_eq!(consumed, first.len());
+        // 残りから 2 件目がそのまま復号できる。
+        let DecodeOutcome::Decoded { message, .. } = decode(&buffer[consumed..]).unwrap() else {
+            panic!("2 件目を復号できなかった");
+        };
+        let Message::Event(event) = *message else {
+            panic!("event ではない");
+        };
+        assert_eq!(event.sequence, DecimalU64::new(2));
+    }
+
+    #[test]
+    fn a_frame_of_exactly_the_limit_is_accepted() {
+        // 上限ちょうどは拒否しない。`>` と `>=` の取り違えを止める。
+        let filler = MAX_FRAME_BYTES - 2;
+        let payload = format!("{{{}}}", " ".repeat(filler));
+        assert_eq!(payload.len(), MAX_FRAME_BYTES);
+
+        // JSON としては空 object なので、メッセージ種別が無い方の失敗になる。
+        // 長さ判定を通過したこと自体が確認したい点。
+        let outcome = decode(&frame_of(payload.as_bytes())).unwrap_err();
+
+        assert!(
+            !matches!(outcome, FrameError::TooLarge { .. }),
+            "上限ちょうどを TooLarge にしている"
+        );
+    }
+
+    #[test]
     fn decode_reports_incomplete_when_the_prefix_is_short() {
         assert_eq!(decode(&[0x01, 0x02]).unwrap(), DecodeOutcome::Incomplete);
     }
@@ -158,6 +210,111 @@ mod tests {
             );
         }
         assert_eq!(names.len(), Method::ALL.len());
+    }
+
+    // ---- docs/10_IPC_DATA_MODEL.md §3 の例をそのまま契約試験にする ----------
+
+    #[test]
+    fn the_documented_request_example_decodes() {
+        let documented = json!({
+            "protocolMajor": 1,
+            "kind": "request",
+            "requestId": "c917d45a-bf92-4ac0-8c3b-c0d731277658",
+            "method": "node.start",
+            "payload": {
+                "nodeId": "node-home",
+                "expectedRevision": 3
+            }
+        });
+
+        let message: Message = serde_json::from_value(documented).unwrap();
+
+        let Message::Request(request) = message else {
+            panic!("request として復号されなかった");
+        };
+        assert_eq!(request.method, Method::NodeStart);
+        let payload: dto::NodeOperationRequest = serde_json::from_value(request.payload).unwrap();
+        // revision は 10 進文字列ではなく数値。§5 が文字列を課すのは GitHub ID と
+        // event sequence だけで、§3 の例も数値で書かれている。
+        assert_eq!(payload.expected_revision, 3);
+    }
+
+    #[test]
+    fn the_documented_response_example_decodes() {
+        let documented = json!({
+            "protocolMajor": 1,
+            "kind": "response",
+            "requestId": "c917d45a-bf92-4ac0-8c3b-c0d731277658",
+            "ok": true,
+            "result": {
+                "operationId": "op-7c28",
+                "accepted": true
+            }
+        });
+
+        let message: Message = serde_json::from_value(documented).unwrap();
+
+        let Message::Response(response) = message else {
+            panic!("response として復号されなかった");
+        };
+        assert!(response.ok);
+        let result: dto::OperationAccepted =
+            serde_json::from_value(response.result.unwrap()).unwrap();
+        assert!(result.accepted);
+        // 例に無い項目は既定値。受付済みであって完了ではない。
+        assert!(!result.deduplicated);
+    }
+
+    #[test]
+    fn the_documented_event_example_decodes() {
+        let documented = json!({
+            "protocolMajor": 1,
+            "kind": "event",
+            "sequence": "1842",
+            "agentGeneration": "9a9a6fec",
+            "event": "runner.observation.changed",
+            "payload": {
+                "runnerId": "runner-linux",
+                "local": "running",
+                "remotePresence": "registered",
+                "remoteAvailability": "unknown",
+                "remoteFreshness": "stale",
+                "remoteErrorCode": "AUTH_EXPIRED",
+                "verifiedAt": "2026-09-19T03:12:45Z",
+                "desired": "running"
+            }
+        });
+
+        let message: Message = serde_json::from_value(documented).unwrap();
+
+        let Message::Event(event) = message else {
+            panic!("event として復号されなかった");
+        };
+        assert_eq!(event.sequence, ids::DecimalU64::new(1842));
+        assert_eq!(event.event, EventKind::RunnerObservationChanged);
+        // §3 の event payload は観測の一部だけを運ぶ。封筒は payload を検査せずに
+        // 通し、method ごとの具体型へは受理後に変換する。
+        assert_eq!(event.payload["remoteErrorCode"], json!("AUTH_EXPIRED"));
+    }
+
+    #[test]
+    fn a_timestamp_must_be_utc_rfc3339() {
+        // 秒精度とミリ秒精度の両方を受ける。
+        assert!(ids::Timestamp::is_well_formed("2026-09-19T03:12:45Z"));
+        assert!(ids::Timestamp::is_well_formed("2026-09-20T00:00:00.000Z"));
+
+        for bad in [
+            "2026-09-19T03:12:45+09:00", // 時差付き
+            "2026-09-19 03:12:45Z",      // T がない
+            "2026-09-19T03:12:45",       // Z がない
+            "2026-09-19",                // 日付だけ
+            "",
+        ] {
+            assert!(
+                serde_json::from_value::<ids::Timestamp>(json!(bad)).is_err(),
+                "{bad} を受理している"
+            );
+        }
     }
 
     #[test]

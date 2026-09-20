@@ -132,7 +132,10 @@ pub struct NodeSnapshot {
     pub node_id: NodeId,
     pub display_name: String,
     /// 楽観ロック用。`node.start` 等の `expectedRevision` と照合する。
-    pub revision: DecimalU64,
+    ///
+    /// GitHub ID や event sequence と違い、10 進文字列にしない。§5 が文字列を課すのは
+    /// その 2 つで、revision は Agent が採番する小さな連番であり、§3 の例も数値で書く。
+    pub revision: u64,
     pub runners: Vec<RunnerObservation>,
     /// Node 全体としての有効状態。片側だけ失敗していれば `Partial`。
     pub effective: EffectiveState,
@@ -225,7 +228,7 @@ pub struct OperationFailure {
 pub struct NodeOperationRequest {
     pub node_id: NodeId,
     /// 直前に読んだ snapshot の revision。ずれていれば `REVISION_CONFLICT`。
-    pub expected_revision: DecimalU64,
+    pub expected_revision: u64,
 }
 
 /// 強制停止の要求 payload。確認 challenge を必須にする。
@@ -233,7 +236,7 @@ pub struct NodeOperationRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ForceStopRequest {
     pub node_id: NodeId,
-    pub expected_revision: DecimalU64,
+    pub expected_revision: u64,
     /// UI が提示した確認 challenge の応答。`null` なら受理しない。
     pub confirmation: Option<String>,
 }
@@ -245,6 +248,10 @@ pub struct OperationAccepted {
     pub operation_id: OperationId,
     pub accepted: bool,
     /// 同じ `requestId` の再送で既存 Operation へ収束した場合に `true`。
+    ///
+    /// 省略は「収束していない」を意味する。§3 の応答例がこの項目を持たないため、
+    /// 既定値を認めて例がそのまま復号できるようにする。
+    #[serde(default)]
     pub deduplicated: bool,
 }
 

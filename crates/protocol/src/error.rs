@@ -28,6 +28,12 @@ pub enum ErrorCode {
     RequiresConfirmation,
     ChecksumMismatch,
     WslGuestUnreachable,
+    /// 受理済みの `requestId` が、別の操作のために使い回された。
+    ///
+    /// `docs/10_IPC_DATA_MODEL.md` §8 は「主な code」を列挙する形なので、その一覧へ
+    /// 足す追加として扱う。冪等キーの一致だけで再送とみなすと、確認や revision の
+    /// ゲートを迂回できてしまうため、一致しない使い回しは明示的に拒否する。
+    RequestIdConflict,
 }
 
 /// ワイヤー上のエラー payload。
@@ -89,6 +95,7 @@ impl ErrorCode {
             Self::RequiresConfirmation => "errors.requiresConfirmation",
             Self::ChecksumMismatch => "errors.checksumMismatch",
             Self::WslGuestUnreachable => "errors.wslGuestUnreachable",
+            Self::RequestIdConflict => "errors.requestIdConflict",
         }
     }
 
@@ -106,7 +113,9 @@ impl ErrorCode {
             | Self::ProtocolMismatch
             | Self::RevisionConflict
             | Self::RequiresConfirmation
-            | Self::ChecksumMismatch => false,
+            | Self::ChecksumMismatch
+            // 同じ要求をそのまま再送しても直らない。呼び出し側が鍵を採り直す。
+            | Self::RequestIdConflict => false,
         }
     }
 }

@@ -157,7 +157,7 @@ impl MockBackend {
         NodeSnapshot {
             node_id: self.node_id.clone(),
             display_name: "Mock Node".to_owned(),
-            revision: DecimalU64::new(self.revision),
+            revision: self.revision,
             effective: effective::aggregate_node(&states),
             runners,
             observed_at: now.to_timestamp(),
@@ -355,7 +355,6 @@ fn observe(runner: &MockRunner, now: UnixMillis) -> RunnerObservation {
     let verdict = effective::evaluate_runner(&EffectiveInput {
         local: runner.local,
         local_freshness,
-        remote_presence: presence,
         remote_availability: availability,
         remote_freshness,
         remote_error_code: runner.remote_error,
@@ -400,16 +399,16 @@ fn build_runners(seed: u64, scenario: MockScenario, base: UnixMillis) -> Vec<Moc
 
     match scenario {
         MockScenario::Idle => vec![
-            with_remote(windows, online(false), base),
-            with_remote(wsl, online(false), base),
+            with_remote(windows, online(BackendKind::NativeWindows, false), base),
+            with_remote(wsl, online(BackendKind::Wsl, false), base),
         ],
         MockScenario::Busy => vec![
-            with_remote(windows, online(true), base),
-            with_remote(wsl, online(true), base),
+            with_remote(windows, online(BackendKind::NativeWindows, true), base),
+            with_remote(wsl, online(BackendKind::Wsl, true), base),
         ],
         MockScenario::Offline => vec![
-            with_remote(windows, offline(), base),
-            with_remote(wsl, offline(), base),
+            with_remote(windows, offline(BackendKind::NativeWindows), base),
+            with_remote(wsl, offline(BackendKind::Wsl), base),
         ],
         MockScenario::Unknown => vec![
             // busy が無い応答。Idle にも Busy にもしない。
@@ -425,8 +424,12 @@ fn build_runners(seed: u64, scenario: MockScenario, base: UnixMillis) -> Vec<Moc
             // 観測間隔ではなく stale 閾値（remote 表示中は 90 秒）を超えた時刻。
             let old = base.plus_millis(-120_000);
             vec![
-                stale(with_remote(windows, online(false), old)),
-                stale(with_remote(wsl, online(false), old)),
+                stale(with_remote(
+                    windows,
+                    online(BackendKind::NativeWindows, false),
+                    old,
+                )),
+                stale(with_remote(wsl, online(BackendKind::Wsl, false), old)),
             ]
         }
         MockScenario::Creating => vec![
@@ -442,7 +445,7 @@ fn build_runners(seed: u64, scenario: MockScenario, base: UnixMillis) -> Vec<Moc
             },
         ],
         MockScenario::PartialFailure => vec![
-            with_remote(windows, online(false), base),
+            with_remote(windows, online(BackendKind::NativeWindows, false), base),
             MockRunner {
                 local: LocalRuntime::Error,
                 remote_error: Some(ErrorCode::WslGuestUnreachable),
@@ -450,12 +453,20 @@ fn build_runners(seed: u64, scenario: MockScenario, base: UnixMillis) -> Vec<Moc
             },
         ],
         MockScenario::RateLimited => vec![
-            rate_limited(with_remote(windows, online(false), base)),
-            rate_limited(with_remote(wsl, online(false), base)),
+            rate_limited(with_remote(
+                windows,
+                online(BackendKind::NativeWindows, false),
+                base,
+            )),
+            rate_limited(with_remote(wsl, online(BackendKind::Wsl, false), base)),
         ],
         MockScenario::ReauthenticationRequired => vec![
-            reauth(with_remote(windows, online(false), base)),
-            reauth(with_remote(wsl, online(false), base)),
+            reauth(with_remote(
+                windows,
+                online(BackendKind::NativeWindows, false),
+                base,
+            )),
+            reauth(with_remote(wsl, online(BackendKind::Wsl, false), base)),
         ],
     }
 }
@@ -518,12 +529,22 @@ fn reauth(runner: MockRunner) -> MockRunner {
     }
 }
 
-fn online(busy: bool) -> Value {
-    json!({"id": 41, "status": "online", "busy": busy})
+/// 同じ scope 内で remote ID が衝突しないよう、Backend ごとに別の値を使う。
+/// `docs/10_IPC_DATA_MODEL.md` §6 の `UNIQUE (scope_id, remote_runner_id)` と、
+/// `docs/05_DOMAIN_STATE.md` §9 の remote identity に合わせる。
+const fn remote_id_for(kind: BackendKind) -> u64 {
+    match kind {
+        BackendKind::NativeWindows => 41,
+        BackendKind::Wsl => 42,
+    }
 }
 
-fn offline() -> Value {
-    json!({"id": 41, "status": "offline", "busy": false})
+fn online(kind: BackendKind, busy: bool) -> Value {
+    json!({"id": remote_id_for(kind), "status": "online", "busy": busy})
+}
+
+fn offline(kind: BackendKind) -> Value {
+    json!({"id": remote_id_for(kind), "status": "offline", "busy": false})
 }
 
 const fn kind_salt(kind: BackendKind) -> u64 {

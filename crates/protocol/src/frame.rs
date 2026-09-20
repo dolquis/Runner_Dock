@@ -13,6 +13,18 @@ pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
 /// 長さ prefix のバイト数。
 pub const LENGTH_PREFIX_BYTES: usize = 4;
 
+/// 診断用 detail の最大文字数。相手由来の文字列を無制限に運ばない。
+pub const MAX_DETAIL_CHARS: usize = 200;
+
+/// 診断用 detail を上限で切る。
+fn truncate_detail(detail: &str) -> String {
+    if detail.chars().count() <= MAX_DETAIL_CHARS {
+        return detail.to_owned();
+    }
+    let head: String = detail.chars().take(MAX_DETAIL_CHARS).collect();
+    format!("{head}…")
+}
+
 /// 復号に失敗した理由。いずれも接続を拒否する側に倒す。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FrameError {
@@ -23,6 +35,10 @@ pub enum FrameError {
     /// payload が UTF-8 でない。
     InvalidUtf8,
     /// JSON として、または既知のメッセージ種別として解釈できない。
+    ///
+    /// `detail` は診断ログ向けで、相手が送ってきた本文の一部を含みうる。長さは
+    /// [`MAX_DETAIL_CHARS`] で切る。`ErrorPayload.details` へそのまま載せない
+    /// （`docs/10_IPC_DATA_MODEL.md` §8）。
     MalformedPayload { detail: String },
     /// 未知の protocol major。無視して誤操作するより拒否する。
     UnknownProtocolMajor { found: u32 },
@@ -73,7 +89,7 @@ pub fn decode(buffer: &[u8]) -> Result<DecodeOutcome, FrameError> {
     // major だけ先に見る。未知 major の本文を既知の型へ当てはめようとしない。
     let raw: serde_json::Value =
         serde_json::from_str(text).map_err(|error| FrameError::MalformedPayload {
-            detail: error.to_string(),
+            detail: truncate_detail(&error.to_string()),
         })?;
     match raw.get("protocolMajor").and_then(serde_json::Value::as_u64) {
         Some(major) if major == u64::from(PROTOCOL_MAJOR) => {}
@@ -83,15 +99,20 @@ pub fn decode(buffer: &[u8]) -> Result<DecodeOutcome, FrameError> {
             });
         }
         None => {
-            return Err(FrameError::MalformedPayload {
-                detail: "protocolMajor がない".to_owned(),
-            });
+            // 欠落と「数値でない / 整数でない」を混ぜない。診断で原因を取り違える。
+            let detail = match raw.get("protocolMajor") {
+                None => "protocolMajor がない".to_owned(),
+                Some(value) => {
+                    truncate_detail(&format!("protocolMajor が符号なし整数でない: {value}"))
+                }
+            };
+            return Err(FrameError::MalformedPayload { detail });
         }
     }
 
     let message: Message =
         serde_json::from_value(raw).map_err(|error| FrameError::MalformedPayload {
-            detail: error.to_string(),
+            detail: truncate_detail(&error.to_string()),
         })?;
 
     Ok(DecodeOutcome::Decoded {

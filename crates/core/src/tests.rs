@@ -13,7 +13,7 @@ use runnerdock_protocol::ids::{AgentGeneration, DecimalU64, RequestId};
 use runnerdock_protocol::message::{Event, EventKind};
 use serde_json::json;
 
-use crate::clock::{Clock, FixedClock, UnixMillis, format_rfc3339_utc};
+use crate::clock::{UnixMillis, format_rfc3339_utc};
 use crate::effective::{self, Conflict, EffectiveInput};
 use crate::events::{ApplyOutcome, EventApplier, PushOutcome, SubscriberQueue};
 use crate::freshness::{self, ObservationTarget, VerifiedAt};
@@ -151,7 +151,6 @@ fn input(
     EffectiveInput {
         local,
         local_freshness: ObservationFreshness::Fresh,
-        remote_presence: RemotePresence::Registered,
         remote_availability: availability,
         remote_freshness: freshness,
         remote_error_code: None,
@@ -205,7 +204,7 @@ fn a_busy_runner_whose_local_process_is_lost_is_busy_with_a_conflict() {
     ));
 
     assert_eq!(verdict.state, EffectiveState::Busy);
-    assert_eq!(verdict.conflict, Some(Conflict::BusyWhileLocalLost));
+    assert_eq!(verdict.conflict, Some(Conflict::BusyWhileLocalNotRunning));
 }
 
 #[test]
@@ -297,17 +296,43 @@ fn an_observation_past_the_threshold_is_stale() {
 }
 
 #[test]
-fn a_single_failed_observation_does_not_make_a_runner_stale() {
-    // 観測間隔（30 秒）を 1 回落としただけでは閾値（90 秒）に届かない。
-    let verified = VerifiedAt::at(T0).failed();
+fn a_failed_observation_leaves_the_verified_time_untouched() {
+    // 失敗は鮮度を進めない。成功した場合と比べて、後から鮮度の差になって表れる。
+    let after_failure = VerifiedAt::at(T0).failed();
+    let after_success = VerifiedAt::at(T0).observed(T0.plus_millis(60_000));
 
-    let result = freshness::evaluate(
-        ObservationTarget::RemoteVisible,
-        verified.get(),
-        T0.plus_millis(60_000),
+    assert_eq!(after_failure.get(), Some(T0));
+    assert_eq!(after_success.get(), Some(T0.plus_millis(60_000)));
+
+    // 観測間隔（30 秒）を 1 回落としただけでは閾値（90 秒）に届かない。
+    let at_60s = T0.plus_millis(60_000);
+    assert_eq!(
+        freshness::evaluate(
+            ObservationTarget::RemoteVisible,
+            after_failure.get(),
+            at_60s
+        ),
+        ObservationFreshness::Fresh
     );
 
-    assert_eq!(result, ObservationFreshness::Fresh);
+    // 失敗し続ければ閾値を越えて Stale になる。成功していれば Fresh のまま。
+    let at_100s = T0.plus_millis(100_000);
+    assert_eq!(
+        freshness::evaluate(
+            ObservationTarget::RemoteVisible,
+            after_failure.get(),
+            at_100s
+        ),
+        ObservationFreshness::Stale
+    );
+    assert_eq!(
+        freshness::evaluate(
+            ObservationTarget::RemoteVisible,
+            after_success.get(),
+            at_100s
+        ),
+        ObservationFreshness::Fresh
+    );
 }
 
 #[test]
@@ -324,21 +349,24 @@ fn a_304_response_refreshes_the_verified_time() {
 }
 
 #[test]
-fn the_stale_threshold_is_about_three_observation_intervals() {
-    // 1 回の観測失敗だけで Stale へ落とさない方針。厳密な 3 倍ではなく、
-    // 3 倍以上 4 倍未満であることを確かめる（Local は 3 秒 / 10 秒）。
-    for target in [
-        ObservationTarget::Local,
-        ObservationTarget::RemoteVisible,
-        ObservationTarget::RemoteHidden,
-    ] {
-        let interval = target.interval_millis();
-        let threshold = target.stale_threshold_millis();
+fn the_observation_intervals_and_thresholds_match_the_canonical_table() {
+    // docs/05_DOMAIN_STATE.md §4 の表を直接の期待値として書く。実装から導出すると
+    // 表を外れる変更を検出できない。
+    let expected = [
+        (ObservationTarget::Local, 3_000, 10_000),
+        (ObservationTarget::RemoteVisible, 30_000, 90_000),
+        (ObservationTarget::RemoteHidden, 60_000, 180_000),
+    ];
 
-        assert!(
-            threshold >= interval * 3 && threshold < interval * 4,
-            "{target:?} の閾値 {threshold} が観測間隔 {interval} のおよそ 3 倍でない"
+    for (target, interval, threshold) in expected {
+        assert_eq!(target.interval_millis(), interval, "{target:?} の観測間隔");
+        assert_eq!(
+            target.stale_threshold_millis(),
+            threshold,
+            "{target:?} の stale 閾値"
         );
+        // 1 回の観測失敗だけで Stale へ落とさない方針（閾値はおよそ 3 倍）。
+        assert!(threshold >= interval * 3);
     }
 }
 
@@ -394,7 +422,8 @@ fn a_retry_after_a_failed_local_save_finds_the_recorded_remote_id() {
     let record = store.find_by_request(&req.request_id).unwrap();
     // 再登録ではなく照合へ回すための材料が残っている。
     assert_eq!(record.registered_remote_id, Some(DecimalU64::new(41)));
-    assert_eq!(record.phase, OperationPhase::Verifying);
+    // 同じ Operation のままで、2 件目は作られていない。
+    assert_eq!(retry.operation_id, accepted.operation_id);
 }
 
 #[test]
@@ -636,16 +665,34 @@ fn consecutive_events_are_applied_in_order() {
 }
 
 #[test]
-fn ordering_follows_the_sequence_even_when_the_clock_moves_backwards() {
-    // 時計が戻っても連番は戻らない。順序判断に時刻を使わない。
+fn ordering_follows_the_sequence_and_ignores_the_timestamps_events_carry() {
+    // 時計が戻っても連番は戻らない。event が載せている時刻ではなく sequence だけで
+    // 順序を判断する。
+    let stamped = |sequence: u64, at: UnixMillis| {
+        Event::new(
+            DecimalU64::new(sequence),
+            AgentGeneration::from("gen-1"),
+            EventKind::RunnerObservationChanged,
+            json!({ "observedAt": at.to_timestamp().0 }),
+        )
+    };
     let mut applier = EventApplier::new(AgentGeneration::from("gen-1"), 1);
-    let mut clock = FixedClock::new(T0);
-    assert_eq!(applier.apply(&event_at(1, "gen-1")), ApplyOutcome::Applied);
 
-    clock.advance_millis(-60_000);
+    // 連番は進むが、載っている時刻は 1 分戻る。
+    assert_eq!(applier.apply(&stamped(1, T0)), ApplyOutcome::Applied);
+    assert_eq!(
+        applier.apply(&stamped(2, T0.plus_millis(-60_000))),
+        ApplyOutcome::Applied
+    );
 
-    assert_eq!(applier.apply(&event_at(2, "gen-1")), ApplyOutcome::Applied);
-    assert_eq!(clock.now(), T0.plus_millis(-60_000));
+    // 逆に、時刻が進んでいても連番が古ければ捨てる。
+    assert_eq!(
+        applier.apply(&stamped(1, T0.plus_millis(600_000))),
+        ApplyOutcome::DroppedStale {
+            sequence: 1,
+            expected: 3
+        }
+    );
 }
 
 #[test]
@@ -687,6 +734,36 @@ fn a_subscriber_that_keeps_up_never_needs_a_resync() {
 
     assert!(!queue.needs_resync());
     assert!(queue.is_empty());
+}
+
+#[test]
+fn thinning_logs_reports_a_count_without_forcing_a_resync() {
+    // docs/10 §9 は、重要状態イベントの取りこぼしと、ログの間引きを分けている。
+    let mut queue = SubscriberQueue::with_capacity(1);
+    queue.push(event_at(1, "gen-1"));
+
+    let log = Event::new(
+        DecimalU64::new(2),
+        AgentGeneration::from("gen-1"),
+        EventKind::LogAppended,
+        json!({"line": "..."}),
+    );
+    queue.push(log);
+
+    assert_eq!(queue.dropped_logs(), 1);
+    assert_eq!(queue.dropped_state(), 0);
+    assert!(!queue.needs_resync());
+}
+
+#[test]
+fn dropping_a_state_event_forces_a_resync() {
+    let mut queue = SubscriberQueue::with_capacity(1);
+    queue.push(event_at(1, "gen-1"));
+
+    queue.push(event_at(2, "gen-1"));
+
+    assert_eq!(queue.dropped_state(), 1);
+    assert!(queue.needs_resync());
 }
 
 #[test]
@@ -975,5 +1052,151 @@ fn a_snapshot_never_carries_a_secret_bearing_field() {
             !text.contains(forbidden),
             "{forbidden} が snapshot に出ている"
         );
+    }
+}
+
+// ---- ローカル観測の鮮度 ------------------------------------------------------
+
+#[test]
+fn a_stale_local_observation_never_reports_ready() {
+    // Agent 再起動直後など、ローカル観測が古いまま GitHub が Idle を返している状況。
+    // 緑（Ready）にしてはいけない（docs/05 §4 の Unknown 行、§7）。
+    let mut raw = input(
+        LocalRuntime::Running,
+        RemoteAvailability::OnlineIdle,
+        ObservationFreshness::Fresh,
+    );
+    raw.local_freshness = ObservationFreshness::Stale;
+
+    let verdict = effective::evaluate_runner(&raw);
+
+    assert_eq!(verdict.state, EffectiveState::Unknown);
+}
+
+#[test]
+fn a_never_observed_local_runtime_is_unknown() {
+    let mut raw = input(
+        LocalRuntime::Running,
+        RemoteAvailability::OnlineIdle,
+        ObservationFreshness::Fresh,
+    );
+    raw.local_freshness = ObservationFreshness::NeverObserved;
+
+    assert_eq!(
+        effective::evaluate_runner(&raw).state,
+        EffectiveState::Unknown
+    );
+}
+
+#[test]
+fn a_local_observation_going_stale_drops_a_ready_node_to_unknown() {
+    // Mock でも同じ経路をたどる。Local の stale 閾値は 10 秒。
+    let mut backend = MockBackend::with_scenario(7, MockScenario::Idle);
+    assert_eq!(backend.snapshot().effective, EffectiveState::Ready);
+
+    backend.advance_millis(10_001);
+
+    let snapshot = backend.snapshot();
+    assert_eq!(
+        snapshot.runners[0].local_freshness,
+        ObservationFreshness::Stale
+    );
+    assert_eq!(snapshot.effective, EffectiveState::Unknown);
+}
+
+// ---- 冪等キーの使い回し ------------------------------------------------------
+
+#[test]
+fn reusing_a_request_id_for_a_different_operation_is_refused() {
+    // 鍵の使い回しで確認ゲートを迂回させない。
+    let mut store = OperationStore::new();
+    store
+        .submit(&request(OperationKind::NodeStart, "req-1", 1), 1, IDLE, T0)
+        .unwrap();
+
+    let mut force = request(OperationKind::NodeForceStop, "req-1", 1);
+    force.confirmation = None;
+    let error = store.submit(&force, 1, IDLE, T0).unwrap_err();
+
+    assert_eq!(error.code, ErrorCode::RequestIdConflict);
+}
+
+#[test]
+fn reusing_a_request_id_for_a_different_target_is_refused() {
+    let mut store = OperationStore::new();
+    store
+        .submit(&request(OperationKind::NodeStart, "req-1", 1), 1, IDLE, T0)
+        .unwrap();
+
+    let mut other = request(OperationKind::NodeStart, "req-1", 1);
+    other.target_id = "node-other".to_owned();
+
+    assert_eq!(
+        store.submit(&other, 1, IDLE, T0).unwrap_err().code,
+        ErrorCode::RequestIdConflict
+    );
+}
+
+#[test]
+fn a_terminal_operation_does_not_roll_back_to_an_earlier_phase() {
+    let mut store = OperationStore::new();
+    let accepted = store
+        .submit(&request(OperationKind::NodeStart, "req-1", 1), 1, IDLE, T0)
+        .unwrap();
+    assert!(store.set_phase(&accepted.operation_id, OperationPhase::Succeeded, T0));
+
+    let moved = store.set_phase(
+        &accepted.operation_id,
+        OperationPhase::Starting,
+        T0.plus_millis(1_000),
+    );
+
+    assert!(!moved);
+    let record = store.get(&accepted.operation_id).unwrap();
+    assert_eq!(record.phase, OperationPhase::Succeeded);
+    assert_eq!(record.finished_at, Some(T0));
+}
+
+#[test]
+fn recording_a_registration_keeps_the_current_phase() {
+    // 登録応答の記録は段階を飛ばさない（docs/05 §5 の Registering → Starting → Verifying）。
+    let mut store = OperationStore::new();
+    let accepted = store
+        .submit(
+            &request(OperationKind::RunnerCreate, "req-create", 1),
+            1,
+            IDLE,
+            T0,
+        )
+        .unwrap();
+    store.set_phase(&accepted.operation_id, OperationPhase::Registering, T0);
+
+    store.record_registration(&accepted.operation_id, DecimalU64::new(41));
+
+    let record = store.get(&accepted.operation_id).unwrap();
+    assert_eq!(record.phase, OperationPhase::Registering);
+    assert_eq!(record.registered_remote_id, Some(DecimalU64::new(41)));
+}
+
+// ---- Mock の remote identity -------------------------------------------------
+
+#[test]
+fn mock_runners_in_one_scope_do_not_share_a_remote_id() {
+    // docs/10 §6 の UNIQUE (scope_id, remote_runner_id) を満たさない fixture を作らない。
+    for &scenario in MockScenario::ALL {
+        let snapshot = MockBackend::with_scenario(7, scenario).snapshot();
+        let mut seen: Vec<(String, String)> = Vec::new();
+
+        for runner in &snapshot.runners {
+            let Some(remote_id) = runner.remote_runner_id else {
+                continue;
+            };
+            let key = (runner.scope_id.0.clone(), remote_id.to_string());
+            assert!(
+                !seen.contains(&key),
+                "{scenario:?} で scope 内の remote ID が衝突している"
+            );
+            seen.push(key);
+        }
     }
 }

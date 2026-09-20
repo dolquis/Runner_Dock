@@ -168,7 +168,7 @@
 
 **背景:** [技術選定](04_TECHNOLOGY_STACK.md)§4は、`crates/protocol`のserde DTOからJSON SchemaとTypeScriptを生成する方針を示しつつ、crateのstable状況とnullable/enum/u64表現の確認をLF-002へ委ねていた。Rust側の型生成crateには、通信契約をツール固有の出力形式へ縛るもの、生成をtest実行に結び付けるもの、`u64`をJavaScriptのnumberへ落とすものがある。
 
-**決定:** JSON Schemaの生成にschemarsを使い、TypeScriptはschemarsの出力から`crates/protocol`内の`contracts-gen`が直接組み立てる。生成物は`packages/contracts/`へcommitし、同じバイナリの`--check`が再生成結果と突き合わせてCIを止める。`pnpm contracts:check`はこのコマンドを包む。
+**決定:** JSON Schemaの生成にschemarsを使い、TypeScriptはschemarsの出力から`crates/protocol`内の`contracts-gen`が直接組み立てる。生成物は`packages/contracts/`へcommitし、同じバイナリの`--check`が再生成結果と突き合わせてCIを止める。[開発者ガイド](15_DEVELOPER_GUIDE.md)§4が挙げる`pnpm contracts:check`は、pnpm workspaceを作る際にこのコマンドを包む設計とする。
 
 **比較:** TypeScript生成crateを追加する案は記述量が減るが、ワイヤー契約の表現がそのcrateの都合に従属する。生成物を持たずビルド時に作る案は差分検出ができない。自前の変換器は、この repo が実際に出すschemaの形(object、文字列enum、`$ref`、配列、`Option`のanyOf、内部タグ付きenum)だけを扱えばよく、想定外の形は`unknown`として表面化する。
 
