@@ -22,8 +22,5 @@ tracing = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true }
 
-[dev-dependencies]
-tokio = { version = "=1.53.1", features = ["macros", "rt", "io-util"] }
-
 [lints]
 workspace = true

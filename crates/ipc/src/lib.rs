@@ -14,7 +14,9 @@
 //! - [`service`]: method から処理への割り当て。registry は固定で、列挙にない
 //!   method はそもそも復号段階で落ちる。
 //! - `transport` / `single_instance` / `identity`: Windows 固有の実体。SID の
-//!   取得、security attributes 付きの pipe 生成、単一起動の強制を担う。
+//!   取得と昇格判定、security attributes 付きの pipe 生成、単一起動の強制を担う。
+//! - `client`: Desktop shell から Agent へ繋ぐ側。名前だけでなく待受けている
+//!   pipe の所有者を照合してから handshake へ進む。
 //!
 //! pipe 名は認証ではない（`docs/09_SECURITY.md`「脅威と対策」TH-03）。秘密と
 //! して扱わず、接続の可否は DACL と remote client 拒否で決める。

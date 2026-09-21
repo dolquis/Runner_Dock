@@ -20,6 +20,8 @@ function describeAgent(outcome: AgentStatusOutcome | null): string {
       return "未接続（ブラウザ起動）";
     case "refused":
       return `未接続（${outcome.error.code}）`;
+    case "unknown":
+      return "不明（確認できませんでした）";
     case "connected":
       return `接続済み / node ${outcome.status.snapshot.nodeId}`;
   }

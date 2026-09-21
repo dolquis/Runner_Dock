@@ -28,8 +28,8 @@ use crate::security::owner_only_sddl;
 
 /// 同時に開ける pipe インスタンスの上限。
 ///
-/// 無制限にしない。接続を張るだけの要求が積まれても、Agent の handle が
-/// 際限なく増えないようにする（`docs/12_TEST_PLAN.md` TC-026 の洪水）。
+/// 無制限にしない。現在の待受は待機 1 本と受理済み 1 本しか持たないので、
+/// この値が効くのは多重化を入れた後（LF-009）である。先に上限を置いておく。
 pub const MAX_PIPE_INSTANCES: u32 = 16;
 
 /// `LocalFree` が要る security descriptor。
@@ -77,7 +77,10 @@ pub struct PipeListener {
     name: String,
     sddl: String,
     /// 次の接続を待っているインスタンス。
-    pending: NamedPipeServer,
+    ///
+    /// 次のインスタンスを作れなかった場合に `None` になる。待受を失ったまま
+    /// 黙って動き続けないよう、次の [`PipeListener::accept`] で作り直す。
+    pending: Option<NamedPipeServer>,
 }
 
 impl PipeListener {
@@ -98,7 +101,7 @@ impl PipeListener {
         Ok(Self {
             name,
             sddl,
-            pending,
+            pending: Some(pending),
         })
     }
 
@@ -117,9 +120,25 @@ impl PipeListener {
     ///
     /// 接続待ちに失敗したとき、次のインスタンスを作れないときに返す。
     pub async fn accept(&mut self) -> io::Result<NamedPipeServer> {
-        self.pending.connect().await?;
-        let next = create_instance(&self.name, &self.sddl, false)?;
-        Ok(std::mem::replace(&mut self.pending, next))
+        // 前回、次のインスタンスを作れずに終わっていたらここで作り直す。
+        let pending = match self.pending.take() {
+            Some(pending) => pending,
+            None => create_instance(&self.name, &self.sddl, false)?,
+        };
+        // 失敗した場合も待機インスタンスを捨てない。
+        if let Err(error) = pending.connect().await {
+            self.pending = Some(pending);
+            return Err(error);
+        }
+
+        // 次を用意できなくても、成立した接続は返す。次回の accept で作り直す。
+        match create_instance(&self.name, &self.sddl, false) {
+            Ok(next) => self.pending = Some(next),
+            Err(error) => {
+                tracing::warn!(kind = ?error.kind(), "次の待受インスタンスを作れなかった");
+            }
+        }
+        Ok(pending)
     }
 }
 
@@ -169,10 +188,13 @@ mod tests {
         );
     }
 
+    /// 待受の性質を 1 つの試験で順に確かめる。
+    ///
+    /// pipe 名は SID から決まるので、分けて書くと同じ名前を並列に奪い合う。
     #[tokio::test]
-    async fn binding_twice_with_the_same_sid_fails() {
+    async fn the_listener_is_exclusive_and_accepts_the_owner() {
         let sid = current_user_sid().unwrap();
-        let first = match PipeListener::bind(&sid) {
+        let mut listener = match PipeListener::bind(&sid) {
             Ok(listener) => listener,
             Err(error) => {
                 // 開発中の Agent が同じ名前で待受けている場合。その状況自体が
@@ -182,28 +204,29 @@ mod tests {
             }
         };
 
-        let second = PipeListener::bind(&sid);
+        // 同じ名前で 2 つ目の待受は作れない。これが単一起動の一方の柱である。
+        assert!(
+            PipeListener::bind(&sid).is_err(),
+            "同じ名前で 2 つ目の待受を作れてしまった"
+        );
 
-        assert!(second.is_err(), "同じ名前で 2 つ目の待受を作れてしまった");
-        drop(first);
+        // 所有者からは繋がる。DACL が自分自身まで閉めていないことの確認。
+        let name = listener.name().to_owned();
+        let client = ClientOptions::new().open(&name);
+        assert!(client.is_ok(), "所有者から接続できない: {client:?}");
+        assert!(listener.accept().await.is_ok());
+
+        // 受理したあとも待受は続く。次のインスタンスが用意されている。
+        let second_client = ClientOptions::new().open(&name);
+        assert!(
+            second_client.is_ok(),
+            "接続を 1 件受けた後に待受が消えた: {second_client:?}"
+        );
+        assert!(listener.accept().await.is_ok());
     }
 
     #[tokio::test]
-    async fn the_owner_can_connect_to_the_listening_pipe() {
-        let sid = current_user_sid().unwrap();
-        let mut listener = match PipeListener::bind(&sid) {
-            Ok(listener) => listener,
-            Err(error) => {
-                allow_only_already_listening(&error);
-                return;
-            }
-        };
-        let name = listener.name().to_owned();
-
-        let accept = tokio::spawn(async move { listener.accept().await.map(|_| ()) });
-        let client = ClientOptions::new().open(&name);
-
-        assert!(client.is_ok(), "所有者から接続できない: {client:?}");
-        assert!(accept.await.unwrap().is_ok());
+    async fn a_value_that_is_not_a_sid_does_not_produce_a_listener() {
+        assert!(PipeListener::bind("not-a-sid").is_err());
     }
 }

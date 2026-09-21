@@ -30,14 +30,22 @@ fn refuse(code: ErrorCode, reason: &str) -> ErrorPayload {
 #[cfg(windows)]
 pub async fn connect_or_start() -> Result<(HandshakeResult, NodeSnapshot), ErrorPayload> {
     use runnerdock_ipc::client::{AgentClient, ClientError, connect_with_retry};
-    use runnerdock_ipc::identity::current_user_sid;
+    use runnerdock_ipc::identity::{current_user_sid, is_elevated};
+
+    // 昇格した GUI から Agent を起こすと、子へ昇格が引き継がれて常駐する
+    // （ADR-003）。日常運用の経路に昇格を持ち込まない。
+    if is_elevated().map_err(|_| refuse(ErrorCode::PermissionOrPolicy, "elevationUnknown"))? {
+        return Err(refuse(ErrorCode::PermissionOrPolicy, "elevatedShell"));
+    }
 
     let sid =
         current_user_sid().map_err(|_| refuse(ErrorCode::PermissionOrPolicy, "sidUnavailable"))?;
 
     let connected = match AgentClient::connect(&sid).await {
         Ok(connected) => connected,
-        Err(ClientError::Connect(_)) => {
+        // 繋がらない理由が「待受が無い」ときだけ Agent を起こす。権限で弾かれた
+        // 場合や所有者が違う場合に起こしにいかない。
+        Err(ClientError::Connect(error)) if error.kind() == io::ErrorKind::NotFound => {
             // 待受が無い。製品同梱の Agent を起こしてから待つ。
             start_detached_agent().map_err(|error| {
                 refuse(
@@ -85,6 +93,11 @@ fn to_payload(error: runnerdock_ipc::client::ClientError) -> ErrorPayload {
         // Agent が返した型付きエラーは、丸めずそのまま UI へ渡す。
         ClientError::Refused(payload) => *payload,
         ClientError::Connect(_) => refuse(ErrorCode::PermissionOrPolicy, "agentNotListening"),
+        // 名前は合ったが待受けているのが自分ではない。Agent を起こして
+        // 上書きしようとせず、そのまま拒否として返す。
+        ClientError::OwnerMismatch => refuse(ErrorCode::PermissionOrPolicy, "pipeOwnerMismatch"),
+        // 応答が返らないことを「停止中」や「正常」へ丸めない。
+        ClientError::TimedOut => refuse(ErrorCode::StatusStale, "agentNotResponding"),
         ClientError::Io(_) => refuse(ErrorCode::StatusStale, "agentDisconnected"),
         ClientError::MalformedResponse => {
             refuse(ErrorCode::ProtocolMismatch, "malformedAgentResponse")

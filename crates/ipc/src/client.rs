@@ -19,7 +19,9 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 
+use crate::identity::owner_sid_of_handle;
 use crate::name::pipe_name;
+use std::os::windows::io::AsHandle;
 
 /// 接続や往復で起きた失敗。
 #[derive(Debug, thiserror::Error)]
@@ -36,14 +38,43 @@ pub enum ClientError {
     /// Agent が型付きのエラーを返した。
     #[error("Agent が要求を拒否した: {}", .0.code.message_key())]
     Refused(Box<ErrorPayload>),
+    /// 名前は合ったが、待受けているのが自分と同じ利用者ではない。
+    ///
+    /// pipe 名は秘密ではなく、先に同じ名前で待受けた別プロセスへ繋がりうる
+    /// （`docs/09_SECURITY.md` TH-03）。名前が合ったことを相手の同一性と
+    /// 読み替えず、この場合は Agent を起こさずに拒否する。
+    #[error("待受けている pipe の所有者が自分と一致しない")]
+    OwnerMismatch,
+    /// 応答が既定の時間内に返らなかった。
+    #[error("Agent の応答が時間内に返らない")]
+    TimedOut,
 }
+
+/// 1 要求の応答を待つ上限。
+///
+/// 待ち続けて UI を「確認中」のまま固めない。待受が 1 接続ずつ処理する間は、
+/// 先客が居るだけでも応答が遅れうるので、時間で切って理由を返す。
+pub const REQUEST_DEADLINE: Duration = Duration::from_secs(20);
 
 /// Agent への接続。1 本の pipe を保持する。
 #[derive(Debug)]
 pub struct AgentClient {
     pipe: NamedPipeClient,
     buffer: Vec<u8>,
+    /// この接続の識別子。冪等キーの前置きに使う。
+    nonce: String,
     next_request: u64,
+}
+
+/// 接続ごとに一意な前置きを作る。
+///
+/// 乱数源を持ち込まず、プロセス ID と接続時刻から組む。冪等キーは秘密ではなく、
+/// 必要なのは「別の接続の鍵と重ならない」ことだけである。
+fn connection_nonce() -> String {
+    let since_epoch = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+    format!("{:x}-{since_epoch:x}", std::process::id())
 }
 
 impl AgentClient {
@@ -57,9 +88,19 @@ impl AgentClient {
         let pipe = ClientOptions::new()
             .open(&name)
             .map_err(ClientError::Connect)?;
+
+        // 名前ではなく所有者で相手を確かめる（`docs/09_SECURITY.md` TH-03 の
+        // SID 照合）。一致しなければ handshake すら始めない。
+        let owner =
+            owner_sid_of_handle(pipe.as_handle()).map_err(|_| ClientError::OwnerMismatch)?;
+        if !owner.eq_ignore_ascii_case(sid) {
+            return Err(ClientError::OwnerMismatch);
+        }
+
         let mut client = Self {
             pipe,
             buffer: Vec::new(),
+            nonce: connection_nonce(),
             next_request: 0,
         };
         let handshake = client.handshake().await?;
@@ -93,23 +134,33 @@ impl AgentClient {
     /// 通信に失敗したとき、Agent が型付きエラーを返したときに返す。
     pub async fn call(&mut self, method: Method, payload: Value) -> Result<Value, ClientError> {
         self.next_request += 1;
-        let request_id = RequestId(format!("ui-{}", self.next_request));
+        // 接続ごとに 1 から振り直さない。冪等キーが再接続で衝突すると、別操作の
+        // 使い回しと正当な再送を Agent が区別できなくなる。
+        let request_id = RequestId(format!("ui-{}-{}", self.nonce, self.next_request));
         let request = Request::new(request_id.clone(), method, payload);
         let bytes =
             encode(&Message::Request(request)).map_err(|_| ClientError::MalformedResponse)?;
         self.pipe.write_all(&bytes).await.map_err(ClientError::Io)?;
         self.pipe.flush().await.map_err(ClientError::Io)?;
 
-        loop {
-            match self.read_message().await? {
-                Message::Response(response) if response.request_id == request_id => {
-                    return unwrap_response(response);
+        // 応答を待ち続けない。待受が 1 接続ずつ処理するので、相手が詰まって
+        // いれば UI が待ちっぱなしになる。
+        let exchange = async {
+            loop {
+                match self.read_message().await? {
+                    Message::Response(response) if response.request_id == request_id => {
+                        return unwrap_response(response);
+                    }
+                    // この版は event を購読しない。往復中に届いたものは捨てる。
+                    Message::Event(_) => {}
+                    // 別の requestId の応答や、こちらへ来ないはずの種別。
+                    _ => return Err(ClientError::MalformedResponse),
                 }
-                // event は購読側が読む。ここでは応答を待ち続ける。
-                Message::Event(_) => {}
-                // 別の requestId の応答や、こちらへ来ないはずの種別。
-                _ => return Err(ClientError::MalformedResponse),
             }
+        };
+        match tokio::time::timeout(REQUEST_DEADLINE, exchange).await {
+            Ok(result) => result,
+            Err(_) => Err(ClientError::TimedOut),
         }
     }
 
@@ -205,6 +256,12 @@ mod tests {
             unwrap_response(response).unwrap_err(),
             ClientError::MalformedResponse
         ));
+    }
+
+    #[test]
+    fn each_connection_gets_its_own_idempotency_key_prefix() {
+        // 同じ前置きが 2 度出ると、再接続後の要求が前の接続の鍵と衝突する。
+        assert_ne!(connection_nonce(), connection_nonce());
     }
 
     #[tokio::test]

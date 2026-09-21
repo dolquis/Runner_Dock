@@ -16,7 +16,9 @@ export type AgentStatusOutcome =
   /** Tauri の shell 上で動いていない（ブラウザ起動）。 */
   | { readonly kind: "noShell" }
   /** shell は居るが Agent へ繋げない、または Agent が拒否した。 */
-  | { readonly kind: "refused"; readonly error: ErrorPayload };
+  | { readonly kind: "refused"; readonly error: ErrorPayload }
+  /** 型付きで返らなかった失敗。確認できていないことを保つ。 */
+  | { readonly kind: "unknown" };
 
 /** Tauri から返った値が `ErrorPayload` の形をしているか。 */
 function isErrorPayload(value: unknown): value is ErrorPayload {
@@ -42,7 +44,9 @@ export async function fetchAgentStatus(): Promise<AgentStatusOutcome> {
     if (isErrorPayload(error)) {
       return { kind: "refused", error };
     }
-    // 型付きで返らなかった失敗も、成功にも既定値にも倒さない。
-    throw error;
+    // 型付きで返らなかった失敗を、成功にも既定値にも倒さない。握り潰しても
+    // いけないので、Unknown として UI へ出す。
+    console.error("agent_status が型付きで失敗しなかった", error);
+    return { kind: "unknown" };
   }
 }

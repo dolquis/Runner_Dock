@@ -10,9 +10,7 @@
 
 use runnerdock_core::events::{PushOutcome, SubscriberQueue};
 use runnerdock_protocol::error::{ErrorCode, ErrorPayload};
-use runnerdock_protocol::frame::{
-    DecodeOutcome, FrameError, LENGTH_PREFIX_BYTES, MAX_FRAME_BYTES, decode, encode,
-};
+use runnerdock_protocol::frame::{DecodeOutcome, FrameError, LENGTH_PREFIX_BYTES, decode, encode};
 use runnerdock_protocol::ids::DecimalU64;
 use runnerdock_protocol::message::{Event, EventKind, Message, Response};
 use runnerdock_protocol::method::Method;
@@ -21,15 +19,22 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::service::AgentService;
 
-/// 購読者ごとのキュー上限。遅い GUI が Agent 全体を止めないようにする
-/// （`docs/10_IPC_DATA_MODEL.md` §9）。
+/// 購読者ごとのキュー上限（`docs/10_IPC_DATA_MODEL.md` §9）。
+///
+/// この版は `events.subscribe` を提供しない。event が出るのは要求を受理した
+/// 直後だけで、背圧と `ResyncRequired` の経路はまだ働かない。遅い購読者への
+/// 対処は、購読と多重化を入れる LF-009 で実際に効く形にする。
 pub const EVENT_QUEUE_CAPACITY: usize = 256;
 
-/// 1 回の読み取りで受け入れる最大バイト数。
+/// handshake を待つ上限。
 ///
-/// 宣言長が上限を超えたフレームは読み捨てずに切るので、buffer がこれ以上
-/// 育つことはない。洪水を受けてもメモリが伸び続けない上限として置く。
-const MAX_BUFFERED_BYTES: usize = LENGTH_PREFIX_BYTES + MAX_FRAME_BYTES;
+/// 繋いだまま何も送らない相手を、待受の占有へ使わせない。GUI の起動直後に
+/// handshake を 1 往復するだけなので、これを超えるのは正常な利用ではない。
+pub const HANDSHAKE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
+
+// buffer の上限は [`decode`] が担う。宣言長が [`MAX_FRAME_BYTES`] を超えた
+// 時点で接続を切るので、溜まるのは長さ prefix と 1 フレーム分までである。
+// 同じ判定をここへ二重に置くと、到達しない防御コードになる。
 
 /// 接続が終わった理由。呼び出し側はログと診断にだけ使う。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +49,11 @@ pub enum SessionEnd {
     UnexpectedMessageKind,
     /// 書き込みまたは読み取りが I/O エラーで終わった。
     Io(String),
+    /// 自分が送ろうとしたメッセージを符号化できなかった。
+    ///
+    /// 相手の問題ではなく実装側の不具合である。I/O 失敗と混ぜると診断で
+    /// 原因を取り違える。
+    EncodeFailed,
 }
 
 /// 1 接続を終わりまで処理する。
@@ -87,7 +97,15 @@ where
                         return SessionEnd::HandshakeRequired;
                     }
 
-                    let outcome = service.call(&request);
+                    // 能力の申告と実際の受理を同じ一覧から決める。ここを通さずに
+                    // 個々の実装へ委ねると、申告した method と受け付ける method が
+                    // 無検査でずれる。
+                    let outcome = if service.served_methods().contains(&request.method) {
+                        service.call(&request)
+                    } else {
+                        Err(ErrorPayload::new(ErrorCode::MethodNotServed)
+                            .with_detail("method", json!(request.method.as_str())))
+                    };
                     if outcome.is_ok() && request.method == Method::SystemHandshake {
                         handshake_done = true;
                     }
@@ -118,14 +136,20 @@ where
             }
         }
 
-        if buffer.len() >= MAX_BUFFERED_BYTES {
-            // 完全なフレームにならないまま上限まで積まれた。
-            return SessionEnd::RejectedFrame(FrameError::TooLarge {
-                declared: buffer.len(),
-            });
-        }
-
-        match stream.read(&mut chunk).await {
+        // handshake が済むまでは待ち続けない。1 接続ずつ処理する現在の待受では、
+        // 繋いだまま何も送らない相手が他の接続を締め出してしまう。
+        let read = if handshake_done {
+            stream.read(&mut chunk).await
+        } else {
+            match tokio::time::timeout(HANDSHAKE_DEADLINE, stream.read(&mut chunk)).await {
+                Ok(read) => read,
+                Err(_) => {
+                    tracing::warn!("handshake を待つ時間を超えたので接続を切る");
+                    return SessionEnd::HandshakeRequired;
+                }
+            }
+        };
+        match read {
             Ok(0) => return SessionEnd::PeerClosed,
             Ok(read) => buffer.extend_from_slice(&chunk[..read]),
             Err(error) => return SessionEnd::Io(error.kind().to_string()),
@@ -169,7 +193,7 @@ where
         Err(error) => {
             // 自分の送信物が上限を超えるのは実装側の不具合。相手には返せない。
             tracing::error!(?error, "送信フレームを符号化できなかった");
-            return Err(SessionEnd::Io("encode".to_owned()));
+            return Err(SessionEnd::EncodeFailed);
         }
     };
     stream
@@ -188,6 +212,7 @@ mod tests {
     use crate::service::MockAgentService;
     use runnerdock_core::mock::{MockBackend, MockScenario};
     use runnerdock_protocol::PROTOCOL_MAJOR;
+    use runnerdock_protocol::frame::MAX_FRAME_BYTES;
     use runnerdock_protocol::ids::RequestId;
     use runnerdock_protocol::message::Request;
     use tokio::io::{DuplexStream, duplex};

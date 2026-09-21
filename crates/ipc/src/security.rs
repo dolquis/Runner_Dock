@@ -38,6 +38,12 @@ pub fn validate_sid(sid: &str) -> Result<(), SecurityError> {
         return Err(SecurityError::MalformedSid);
     }
 
+    // 識別子権威。ここまでは主体を指さない。
+    let authority = parts.next().ok_or(SecurityError::MalformedSid)?;
+    if authority.is_empty() || !authority.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(SecurityError::MalformedSid);
+    }
+
     let mut subauthorities = 0_usize;
     for part in parts {
         if part.is_empty() || !part.bytes().all(|b| b.is_ascii_digit()) {
@@ -102,6 +108,8 @@ mod tests {
             "WD",
             "",
             "S-1",
+            // 権威だけで部分認証子が無い。主体を指さない。
+            "S-1-5",
             "S-1-5-21-1001)(A;;GA;;;WD",
             "S-1-5-21-x",
             "S-2-5-21-1001",

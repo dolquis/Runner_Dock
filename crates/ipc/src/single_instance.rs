@@ -32,8 +32,14 @@ pub struct SingleInstanceLock {
 /// ロックを取れなかった理由。
 #[derive(Debug)]
 pub enum LockError {
-    /// 同じ SID の Agent が既に動いている。
+    /// 同じ名前の単一起動ロックが既にある。
+    ///
+    /// 通常は同じ利用者の Agent が動いている場合だが、名前は SID から決まり
+    /// 予測できるので、同一セッションの別プロセスが先に取った可能性も残る。
+    /// 「Agent が動いている」と断定しない。
     AlreadyRunning,
+    /// SID として解釈できず、ロック名を決められない。
+    MalformedSid,
     /// mutex を作れなかった。
     Os(io::Error),
 }
@@ -41,7 +47,8 @@ pub enum LockError {
 impl std::fmt::Display for LockError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::AlreadyRunning => f.write_str("同じ利用者の Agent が既に動いている"),
+            Self::AlreadyRunning => f.write_str("同名の単一起動ロックが既に存在する"),
+            Self::MalformedSid => f.write_str("SID からロック名を決められない"),
             Self::Os(error) => write!(f, "単一起動ロックを取得できない: {error}"),
         }
     }
@@ -57,11 +64,12 @@ impl SingleInstanceLock {
     /// 既に同じ名前の mutex があるときは [`LockError::AlreadyRunning`]、OS 側で
     /// 失敗したときは [`LockError::Os`] を返す。
     pub fn acquire(sid: &str) -> Result<Self, LockError> {
-        let name =
-            single_instance_name(sid).map_err(|error| LockError::Os(io::Error::other(error)))?;
+        let name = single_instance_name(sid).map_err(|_| LockError::MalformedSid)?;
         let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
 
-        // SAFETY: security attributes を渡さないので既定（作成者のみ）になる。
+        // SAFETY: security attributes を渡さないので、作成者 token の既定 DACL
+        // が付く（作成者のほか SYSTEM と Administrators を含む）。ここで守るのは
+        // 秘密ではなく「同名を 2 つ作らせない」ことだけなので、この既定でよい。
         // 名前は NUL 終端の UTF-16 で、呼び出しの間だけ読まれる。
         // 参照: Win32 `CreateMutexW`。
         let handle = unsafe { CreateMutexW(ptr::null(), 1, wide.as_ptr()) };
@@ -103,36 +111,36 @@ mod tests {
     use super::*;
     use crate::identity::current_user_sid;
 
+    /// 取得と解放を 1 つの試験で順に確かめる。
+    ///
+    /// ロック名は SID から決まるので、分けて書くと同じ名前を並列に奪い合い、
+    /// 「解放されたはずなのに取れない」偽の失敗が出る。
     #[test]
-    fn a_second_lock_for_the_same_sid_is_refused() {
+    fn the_lock_excludes_a_second_holder_and_is_released_on_drop() {
         let sid = current_user_sid().unwrap();
         let first = match SingleInstanceLock::acquire(&sid) {
             Ok(lock) => lock,
             // 開発中の Agent が動いている場合。取れないこと自体が期待動作。
             Err(LockError::AlreadyRunning) => return,
             // 名前が不正で作れない等を「既に動いている」と読み替えない。
-            Err(LockError::Os(error)) => panic!("mutex を作れない: {error:?}"),
+            Err(error) => panic!("mutex を作れない: {error:?}"),
         };
 
         let second = SingleInstanceLock::acquire(&sid);
-
         assert!(
             matches!(second, Err(LockError::AlreadyRunning)),
             "{second:?}"
         );
+
+        drop(second);
         drop(first);
+        assert!(SingleInstanceLock::acquire(&sid).is_ok());
     }
 
     #[test]
-    fn the_lock_is_released_when_dropped() {
-        let sid = current_user_sid().unwrap();
-        let first = match SingleInstanceLock::acquire(&sid) {
-            Ok(lock) => lock,
-            Err(LockError::AlreadyRunning) => return,
-            Err(LockError::Os(error)) => panic!("mutex を作れない: {error:?}"),
-        };
-        drop(first);
+    fn a_value_that_is_not_a_sid_is_not_reported_as_already_running() {
+        let error = SingleInstanceLock::acquire("not-a-sid");
 
-        assert!(SingleInstanceLock::acquire(&sid).is_ok());
+        assert!(matches!(error, Err(LockError::MalformedSid)), "{error:?}");
     }
 }

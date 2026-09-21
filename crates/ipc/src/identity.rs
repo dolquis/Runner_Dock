@@ -12,11 +12,17 @@
 )]
 
 use std::io;
+use std::os::windows::io::{AsRawHandle, BorrowedHandle};
 use std::ptr;
 
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, LocalFree};
-use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
-use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
+use windows_sys::Win32::Security::Authorization::{
+    ConvertSidToStringSidW, GetSecurityInfo, SE_KERNEL_OBJECT,
+};
+use windows_sys::Win32::Security::{
+    GetTokenInformation, OWNER_SECURITY_INFORMATION, TOKEN_ELEVATION, TOKEN_QUERY, TOKEN_USER,
+    TokenElevation, TokenUser,
+};
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
 /// 閉じ忘れを防ぐための token handle。
@@ -105,6 +111,108 @@ pub fn current_user_sid() -> io::Result<String> {
         value
     };
     Ok(value)
+}
+
+/// kernel object（ここでは接続した pipe）の所有者 SID を文字列で返す。
+///
+/// pipe 名は秘密ではなく、先に同じ名前で待受けた別プロセスへ繋がりうる
+/// （`docs/09_SECURITY.md` TH-03）。名前が合ったことを相手の同一性と読み替え
+/// ないため、繋いだ handle から所有者を引いて照合する。
+///
+/// # Errors
+///
+/// security 情報を取れない、SID を文字列化できないときに OS のエラーを返す。
+pub fn owner_sid_of_handle(handle: BorrowedHandle<'_>) -> io::Result<String> {
+    // 借用した handle は呼び出しの間、有効であることが型で保証される。
+    let handle: HANDLE = handle.as_raw_handle().cast();
+    let mut owner: *mut core::ffi::c_void = ptr::null_mut();
+    let mut descriptor: *mut core::ffi::c_void = ptr::null_mut();
+    // SAFETY: `handle` は呼び出し側が持つ有効な kernel object の handle で、
+    // 出力の 2 つは書き込み可能な場所である。成功時の descriptor は
+    // `LocalFree` で返す。参照: Win32 `GetSecurityInfo`。
+    let status = unsafe {
+        GetSecurityInfo(
+            handle,
+            SE_KERNEL_OBJECT,
+            OWNER_SECURITY_INFORMATION,
+            &raw mut owner,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            &raw mut descriptor,
+        )
+    };
+    if status != 0 {
+        return Err(io::Error::from_raw_os_error(
+            i32::try_from(status).unwrap_or(-1),
+        ));
+    }
+
+    let mut text: *mut u16 = ptr::null_mut();
+    // SAFETY: `owner` は取得した descriptor 内の有効な SID を指す。
+    let converted = unsafe { ConvertSidToStringSidW(owner, &raw mut text) };
+    if converted == 0 {
+        let error = io::Error::last_os_error();
+        // SAFETY: 取得済みの descriptor を 1 度だけ解放する。
+        unsafe {
+            LocalFree(descriptor);
+        }
+        return Err(error);
+    }
+
+    // SAFETY: NUL 終端の UTF-16 を長さを数えてから読み、読み終えてから
+    // 文字列と descriptor の両方を解放する。
+    let value = unsafe {
+        let mut length = 0_usize;
+        while *text.add(length) != 0 {
+            length += 1;
+        }
+        let slice = std::slice::from_raw_parts(text, length);
+        let value = String::from_utf16_lossy(slice);
+        LocalFree(text.cast());
+        LocalFree(descriptor);
+        value
+    };
+    Ok(value)
+}
+
+/// 実行中プロセスが昇格しているか。
+///
+/// 日常運用の Agent と GUI は非昇格で動かす（ADR-003、`AGENTS.md` §5.1）。
+/// 昇格したまま待受を始めると、同じ SID の非昇格 GUI から昇格権限の操作へ
+/// 繋がるので、判定できる形で持つ。
+///
+/// # Errors
+///
+/// token を開けない、token 情報を取れないときに OS のエラーを返す。
+pub fn is_elevated() -> io::Result<bool> {
+    let mut raw_token: HANDLE = ptr::null_mut();
+    // SAFETY: `current_user_sid` と同じ使い方である。参照: Win32
+    // `OpenProcessToken`。
+    let opened = unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &raw mut raw_token) };
+    if opened == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let token = TokenHandle(raw_token);
+
+    let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
+    let mut returned: u32 = 0;
+    let size = u32::try_from(size_of::<TOKEN_ELEVATION>()).unwrap_or(u32::MAX);
+    // SAFETY: 出力先は `TOKEN_ELEVATION` 1 個分で、長さも同じ値を渡している。
+    // 参照: Win32 `GetTokenInformation`。
+    let filled = unsafe {
+        GetTokenInformation(
+            token.0,
+            TokenElevation,
+            (&raw mut elevation).cast(),
+            size,
+            &raw mut returned,
+        )
+    };
+    if filled == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(elevation.TokenIsElevated != 0)
 }
 
 #[cfg(test)]

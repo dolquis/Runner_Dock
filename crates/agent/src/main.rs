@@ -49,11 +49,21 @@ fn main() -> io::Result<()> {
 #[cfg(windows)]
 fn serve() -> io::Result<()> {
     use runnerdock_core::mock::{MockBackend, MockScenario};
-    use runnerdock_ipc::identity::current_user_sid;
+    use runnerdock_ipc::identity::{current_user_sid, is_elevated};
     use runnerdock_ipc::service::MockAgentService;
     use runnerdock_ipc::session::serve_connection;
     use runnerdock_ipc::single_instance::{LockError, SingleInstanceLock};
     use runnerdock_ipc::transport::PipeListener;
+
+    // 日常運用の Agent を昇格して動かさない（ADR-003）。昇格したまま待受けると、
+    // 同じ SID の非昇格 GUI から昇格権限の操作へ繋がってしまう。
+    if is_elevated()? {
+        tracing::error!("昇格した状態では待受を開始しない。通常の権限で起動する");
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Agent は非昇格で動かす",
+        ));
+    }
 
     let sid = current_user_sid()?;
     // 単一起動は mutex と pipe の両方で確かめる。片方だけでは、取り残された
@@ -61,8 +71,14 @@ fn serve() -> io::Result<()> {
     let lock = match SingleInstanceLock::acquire(&sid) {
         Ok(lock) => lock,
         Err(LockError::AlreadyRunning) => {
-            tracing::info!("同じ利用者の Agent が既に動いているため起動しない");
+            tracing::info!("同名の単一起動ロックが既にあるため起動しない");
             return Ok(());
+        }
+        Err(LockError::MalformedSid) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "SID からロック名を決められない",
+            ));
         }
         Err(LockError::Os(error)) => return Err(error),
     };
@@ -71,7 +87,16 @@ fn serve() -> io::Result<()> {
         .enable_all()
         .build()?;
     runtime.block_on(async move {
-        let mut listener = PipeListener::bind(&sid)?;
+        let mut listener = match PipeListener::bind(&sid) {
+            Ok(listener) => listener,
+            // 別のログオンセッションの Agent が同じ名前で待受けている場合。
+            // mutex 側と同じく、二重起動の防止が働いた結果として終える。
+            Err(error) if is_already_listening(&error) => {
+                tracing::info!(kind = ?error.kind(), "同名の待受が既にあるため起動しない");
+                return Ok(());
+            }
+            Err(error) => return Err(error),
+        };
         tracing::info!(pipe = listener.name(), lock = lock.name(), "待受を開始した");
 
         let mut service = MockAgentService::new(MockBackend::with_scenario(1, MockScenario::Idle));
@@ -84,14 +109,31 @@ fn serve() -> io::Result<()> {
                     return Ok(());
                 }
                 accepted = listener.accept() => {
-                    let stream = accepted?;
-                    // 1 接続ずつ処理する。同時接続の多重化は LF-009 で扱う。
-                    let end = serve_connection(stream, &mut service).await;
-                    tracing::info!(?end, "接続を終えた");
+                    match accepted {
+                        Ok(stream) => {
+                            // 1 接続ずつ処理する。同時接続の多重化は LF-009 で扱う。
+                            let end = serve_connection(stream, &mut service).await;
+                            tracing::info!(?end, "接続を終えた");
+                        }
+                        Err(error) => {
+                            // 1 接続の失敗で Agent を落とさない。次の接続を待つ。
+                            tracing::warn!(kind = ?error.kind(), "接続を受け付けられなかった");
+                        }
+                    }
                 }
             }
         }
     })
+}
+
+/// 待受を作れない理由が「既に同名の待受がある」か。
+///
+/// `ERROR_ACCESS_DENIED` / `ERROR_ALREADY_EXISTS` / `ERROR_PIPE_BUSY` だけを
+/// そう扱う。他の失敗を二重起動の防止へ読み替えると、待受を持てていない状態を
+/// 正常終了として隠してしまう。
+#[cfg(windows)]
+fn is_already_listening(error: &io::Error) -> bool {
+    matches!(error.raw_os_error(), Some(5 | 183 | 231))
 }
 
 #[cfg(not(windows))]
