@@ -12,6 +12,7 @@
 apps/desktop/             React UI / src-tauri bridge
 crates/core/              pure domain / reducer / policy
 crates/protocol/          DTO / schema / versioning
+crates/ipc/               named pipe transport / session / method registry
 crates/agent/             user-session supervisor
 crates/guest/             WSL-side supervisor
 crates/backends/          native Windows / WSL adapters
@@ -57,7 +58,7 @@ wsl.exe --list --verbose
 | コマンド | 実装する動作 | 実体 |
 |---|---|---|
 | `pnpm dev:mock` | 実GitHub/WSLへ接続せずUIを表示 | LF-001 |
-| `pnpm desktop:dev` | Tauri UIを起動しuser Agentへ接続 | LF-001でUI起動まで。Agent接続はLF-005 |
+| `pnpm desktop:dev` | Tauri UIを起動しuser Agentへ接続 | UI起動はLF-001、Agent接続はLF-005 |
 | `pnpm lint` | TypeScript、React、禁止APIの検査 | LF-001 |
 | `pnpm test` | UIの単体試験 | LF-001でUIのみ。Workflowの純粋関数とfixture試験はLF-014 |
 | `pnpm contracts:check` | Rust由来の契約生成物との差分検査 | LF-002 |

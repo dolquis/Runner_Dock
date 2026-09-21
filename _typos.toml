@@ -1,0 +1,9 @@
+# typos の辞書から外す語。pre-commit と CI の crate-ci/typos が共通で読む。
+#
+# 綴り間違いに見えるが仕様上の語であるものだけを列挙する。範囲を広げると
+# 本物の綴り間違いを見逃すので、由来を書ける語に限る。
+
+[default.extend-words]
+# SDDL の主体略称（Builtin Administrators）。`crates/ipc/src/security.rs` が、
+# 通してはいけない略称として名指しで扱う。
+BA = "BA"

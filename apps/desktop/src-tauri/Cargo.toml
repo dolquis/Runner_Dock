@@ -19,10 +19,14 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "=2.6.3", features = [] }
 
 [dependencies]
+runnerdock-ipc = { workspace = true }
 runnerdock-protocol = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tauri = { version = "=2.11.6", features = [] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true }
 
 [lints]
 workspace = true

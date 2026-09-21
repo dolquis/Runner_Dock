@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "./App";
@@ -16,5 +16,12 @@ describe("App", () => {
   it("does not claim a shell connection when running outside Tauri", () => {
     render(<App />);
     expect(screen.getByTestId("shell-peer").textContent).toContain("未接続");
+  });
+
+  it("does not claim an agent connection when running outside Tauri", async () => {
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByTestId("agent-status").textContent).toContain("未接続");
+    });
   });
 });

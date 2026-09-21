@@ -34,6 +34,12 @@ pub enum ErrorCode {
     /// 足す追加として扱う。冪等キーの一致だけで再送とみなすと、確認や revision の
     /// ゲートを迂回できてしまうため、一致しない使い回しは明示的に拒否する。
     RequestIdConflict,
+    /// registry にはあるが、この Agent 版がまだ処理を提供していない method。
+    ///
+    /// `docs/10_IPC_DATA_MODEL.md` §8 の「主な code」へ足す追加として扱う。
+    /// 提供していないことを成功や空の結果へ丸めると、UI が「実行された」と
+    /// 表示してしまう。版の違いとして機械判定できる形で返す。
+    MethodNotServed,
 }
 
 /// ワイヤー上のエラー payload。
@@ -96,6 +102,7 @@ impl ErrorCode {
             Self::ChecksumMismatch => "errors.checksumMismatch",
             Self::WslGuestUnreachable => "errors.wslGuestUnreachable",
             Self::RequestIdConflict => "errors.requestIdConflict",
+            Self::MethodNotServed => "errors.methodNotServed",
         }
     }
 
@@ -115,7 +122,9 @@ impl ErrorCode {
             | Self::RequiresConfirmation
             | Self::ChecksumMismatch
             // 同じ要求をそのまま再送しても直らない。呼び出し側が鍵を採り直す。
-            | Self::RequestIdConflict => false,
+            | Self::RequestIdConflict
+            // Agent を更新するまで結果は変わらない。
+            | Self::MethodNotServed => false,
         }
     }
 }

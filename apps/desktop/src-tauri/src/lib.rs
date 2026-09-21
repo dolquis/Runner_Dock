@@ -1,11 +1,12 @@
 //! Desktop の Rust bridge。
 //!
-//! LF-001 では Agent へ接続しない。UI が「どの契約版の shell に載っているか」
-//! を確認できる読取 command だけを公開する。
+//! UI へ公開するのは型付き command だけで、OS シェル、Runner、token、DB への
+//! 直接の経路は作らない（AGENTS.md §5.1）。Agent との往復は [`agent`] が持つ。
 
 // テストでは失敗時に落ちてよい。製品コード側の unwrap / expect だけを止める。
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod agent;
 pub mod commands;
 
 /// Tauri アプリケーションを起動する。
@@ -21,7 +22,10 @@ pub mod commands;
 )]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![commands::shell_peer])
+        .invoke_handler(tauri::generate_handler![
+            commands::shell_peer,
+            commands::agent_status
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -38,10 +38,12 @@ WebView2 と MSVC ビルドツールは OS 側の前提であり、このファ�
 | `tracing` | 0.1.44 | 0.1.44 | 構造化ログ |
 | `tracing-subscriber` | 0.3.23 | 0.3.23 | ログ出力先とフィルタ |
 | `clap` | 4.6.7 | 4.6.7 | CLI の引数解析 |
+| `tokio` | 1.53.1 | 1.53.1 | Agent の named pipe 待受と Desktop 側の接続。`net` feature に Windows named pipe が入る |
+| `windows-sys` | 0.61.2 | 0.61.2 | SID の取得、SDDL から security descriptor への変換、単一起動の named mutex。`cfg(windows)` の依存としてだけ使う |
 
 確認元は crates.io の versions API（`https://crates.io/api/v1/crates/<crate>/versions`）で、yank 済みと prerelease を除いた最新安定版である。`tauri` と `tauri-build` は 2 系に限定して取った。
 
-`tokio`、`reqwest`、`sqlx`、`windows` は後続タスクで導入する。使う段になってから確認値を取り直す。`anyhow` は使う crate ができた時点で追加する。
+`reqwest`、`sqlx` は後続タスクで導入する。使う段になってから確認値を取り直す。`anyhow` は使う crate ができた時点で追加する。
 
 ## 4. JavaScript 依存
 

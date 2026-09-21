@@ -1,0 +1,26 @@
+# Agent の待受と、Desktop shell 側の接続。Windows named pipe の生成と ACL、
+# 単一起動の強制、固定 method registry の適用をここへ閉じ込める
+# （docs/10_IPC_DATA_MODEL.md §1、docs/09_SECURITY.md「脅威と対策」TH-03）。
+[package]
+name = "runnerdock-ipc"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Runner Dock local IPC transport and session"
+
+[dependencies]
+runnerdock-core = { workspace = true }
+runnerdock-protocol = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true }
+
+[lints]
+workspace = true
