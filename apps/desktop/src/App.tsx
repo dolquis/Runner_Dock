@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { type AgentStatusOutcome, fetchAgentStatus } from "./agent-status";
 import { currentDataSource } from "./data-source";
 import { type ShellPeer, fetchShellPeer } from "./shell-peer";
 
@@ -9,15 +10,36 @@ import { type ShellPeer, fetchShellPeer } from "./shell-peer";
  * Runner の一覧、操作ボタン、GitHub 接続は持たない。workspace が起動し、
  * どの出所のデータを読む build なのかを確認するためだけの画面である。
  */
+/** Agent の状態を 1 行の説明にする。失敗を「接続済み」へ丸めない。 */
+function describeAgent(outcome: AgentStatusOutcome | null): string {
+  if (outcome === null) {
+    return "確認中";
+  }
+  switch (outcome.kind) {
+    case "noShell":
+      return "未接続（ブラウザ起動）";
+    case "refused":
+      return `未接続（${outcome.error.code}）`;
+    case "connected":
+      return `接続済み / node ${outcome.status.snapshot.nodeId}`;
+  }
+}
+
 export function App(): React.JSX.Element {
   const dataSource = currentDataSource();
   const [shellPeer, setShellPeer] = useState<ShellPeer | null>(null);
+  const [agent, setAgent] = useState<AgentStatusOutcome | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void fetchShellPeer().then((peer) => {
       if (!cancelled) {
         setShellPeer(peer);
+      }
+    });
+    void fetchAgentStatus().then((outcome) => {
+      if (!cancelled) {
+        setAgent(outcome);
       }
     });
     return () => {
@@ -40,6 +62,8 @@ export function App(): React.JSX.Element {
             ? "未接続（ブラウザ起動）"
             : `protocol ${shellPeer.protocolMajor} / ${shellPeer.implementationVersion}`}
         </dd>
+        <dt>Agent</dt>
+        <dd data-testid="agent-status">{describeAgent(agent)}</dd>
       </dl>
     </main>
   );

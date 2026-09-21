@@ -12,6 +12,7 @@
 apps/desktop/             React UI / src-tauri bridge
 crates/core/              pure domain / reducer / policy
 crates/protocol/          DTO / schema / versioning
+crates/ipc/               named pipe transport / session / method registry
 crates/agent/             user-session supervisor
 crates/guest/             WSL-side supervisor
 crates/backends/          native Windows / WSL adapters

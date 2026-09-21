@@ -89,6 +89,7 @@ GUI終了ではAgentを止めないため、上記のfail-stopとは独立です
 apps/desktop/            Reactとsrc-tauri
 crates/core/             ドメイン、ポリシー、Reconciler
 crates/protocol/         IPC DTOと型生成
+crates/ipc/              named pipeの待受・接続、session、固定method registry
 crates/agent/            Windowsホスト、各adapterの組立て
 crates/guest/            WSL内限定実行プロセス
 crates/backends/         windows / wsl adapter

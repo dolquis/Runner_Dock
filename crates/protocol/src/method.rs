@@ -79,6 +79,38 @@ impl Method {
         Self::SettingsApply,
     ];
 
+    /// ワイヤー上の method 名。`serde` の rename と同じ値を返す。
+    ///
+    /// 能力一覧やログで名前が要る箇所のために持つ。ここと `serde` の rename が
+    /// ずれると、申告した能力と実際に受け付ける名前が食い違うので、試験で
+    /// 直列化結果と突き合わせる。
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SystemHandshake => "system.handshake",
+            Self::SystemDoctor => "system.doctor",
+            Self::NodeSnapshot => "node.snapshot",
+            Self::NodeStart => "node.start",
+            Self::NodeStop => "node.stop",
+            Self::NodeForceStop => "node.forceStop",
+            Self::RunnerPlanCreate => "runner.planCreate",
+            Self::RunnerApplyCreate => "runner.applyCreate",
+            Self::RunnerPlanRemove => "runner.planRemove",
+            Self::RunnerApplyRemove => "runner.applyRemove",
+            Self::OperationGet => "operation.get",
+            Self::OperationCancel => "operation.cancel",
+            Self::AuthBeginDevice => "auth.beginDevice",
+            Self::AuthCancel => "auth.cancel",
+            Self::AuthLogout => "auth.logout",
+            Self::CredentialImport => "credential.import",
+            Self::EventsSubscribe => "events.subscribe",
+            Self::LogsSubscribe => "logs.subscribe",
+            Self::LogsExport => "logs.export",
+            Self::SettingsPlan => "settings.plan",
+            Self::SettingsApply => "settings.apply",
+        }
+    }
+
     /// 外部からの副作用を伴うか。読取専用 method は再試行の判断が違う。
     #[must_use]
     pub const fn is_mutating(self) -> bool {
@@ -98,5 +130,25 @@ impl Method {
                 // 診断 ZIP をディスクへ書く。出力先確認を伴うので読取扱いにしない。
                 | Self::LogsExport
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Method;
+
+    #[test]
+    fn as_str_matches_the_wire_name() {
+        for method in Method::ALL {
+            let encoded = serde_json::to_value(method).unwrap();
+
+            assert_eq!(encoded.as_str(), Some(method.as_str()));
+        }
+    }
+
+    #[test]
+    fn a_name_outside_the_registry_is_rejected() {
+        assert!(serde_json::from_value::<Method>(serde_json::json!("exec")).is_err());
+        assert!(serde_json::from_value::<Method>(serde_json::json!("node.Start")).is_err());
     }
 }

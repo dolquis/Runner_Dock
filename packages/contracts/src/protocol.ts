@@ -11,6 +11,18 @@ export const PROTOCOL_MAJOR = 1;
 export type AgentGeneration = string;
 
 /**
+ * Desktop shell が UI へ返す Agent の状態。
+ *
+ * Renderer と Tauri の境界に出る型もここで定義し、TypeScript 側は生成物を使う
+ * （ADR-017）。UI は pipe 名も実行ファイルの path も受け取らない。取得できな
+ * かったことは `Result` の失敗側で表し、既定値で埋めない。
+ */
+export interface AgentStatus {
+  readonly handshake: HandshakeResult;
+  readonly snapshot: NodeSnapshot;
+}
+
+/**
  * Backend（`NativeWindows` または具体的な WSL 環境）の ID。
  */
 export type BackendId = string;
@@ -59,7 +71,7 @@ export type EffectiveState = "busy" | "unknown" | "ready" | "disconnected" | "re
 /**
  * 機械判定用のエラー code。日本語訳を変えても動作が変わらないようにする。
  */
-export type ErrorCode = "PERMISSION_OR_POLICY" | "RATE_LIMITED" | "RUNNER_BUSY" | "PROTOCOL_MISMATCH" | "REQUIRES_CONFIRMATION" | "CHECKSUM_MISMATCH" | "WSL_GUEST_UNREACHABLE" | "AUTH_EXPIRED" | "STATUS_STALE" | "PATH_NOT_OWNED" | "REVISION_CONFLICT" | "REQUEST_ID_CONFLICT";
+export type ErrorCode = "PERMISSION_OR_POLICY" | "RATE_LIMITED" | "RUNNER_BUSY" | "PROTOCOL_MISMATCH" | "REQUIRES_CONFIRMATION" | "CHECKSUM_MISMATCH" | "WSL_GUEST_UNREACHABLE" | "AUTH_EXPIRED" | "STATUS_STALE" | "PATH_NOT_OWNED" | "REVISION_CONFLICT" | "REQUEST_ID_CONFLICT" | "METHOD_NOT_SERVED";
 
 /**
  * ワイヤー上のエラー payload。

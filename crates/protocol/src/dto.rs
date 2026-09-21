@@ -322,6 +322,18 @@ pub struct HandshakeResult {
     pub capabilities: Vec<String>,
 }
 
+/// Desktop shell が UI へ返す Agent の状態。
+///
+/// Renderer と Tauri の境界に出る型もここで定義し、TypeScript 側は生成物を使う
+/// （ADR-017）。UI は pipe 名も実行ファイルの path も受け取らない。取得できな
+/// かったことは `Result` の失敗側で表し、既定値で埋めない。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentStatus {
+    pub handshake: HandshakeResult,
+    pub snapshot: NodeSnapshot,
+}
+
 /// handshake が不一致だった理由。
 ///
 /// 「接続できません」へ丸めない。本体・Agent・Guest は同じ互換表で管理するので

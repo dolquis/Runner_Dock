@@ -1,11 +1,12 @@
 # Cargo workspace（docs/03_ARCHITECTURE.md §9「初期モノレポ構成」）。
-# LF-001 では core / protocol / agent / guest / cli と desktop の src-tauri
-# だけを置く。backends / github / storage は後続タスクで追加する。
+# 現在は core / protocol / ipc / agent / guest / cli と desktop の src-tauri を
+# 置く。backends / github / storage は後続タスクで追加する。
 [workspace]
 resolver = "3"
 members = [
     "crates/core",
     "crates/protocol",
+    "crates/ipc",
     "crates/agent",
     "crates/guest",
     "crates/cli",
@@ -24,14 +25,33 @@ repository = "https://github.com/dolquis/Runner_Dock"
 [workspace.dependencies]
 runnerdock-core = { path = "crates/core" }
 runnerdock-protocol = { path = "crates/protocol" }
+runnerdock-ipc = { path = "crates/ipc" }
 
 clap = { version = "=4.6.7", features = ["derive"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 schemars = "=1.2.2"
 serde_json = "=1.0.151"
 thiserror = "=2.0.20"
+# Agent の待受と Desktop 側の接続で使う。named pipe は net feature に含まれる。
+tokio = { version = "=1.53.1", features = [
+    "rt",
+    "net",
+    "io-util",
+    "sync",
+    "time",
+    "macros",
+    "signal",
+] }
 tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter", "json"] }
+# Windows 固有の SID 取得・SDDL 変換・named mutex。cfg(windows) の crate でだけ使う。
+windows-sys = { version = "=0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
