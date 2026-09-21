@@ -49,13 +49,17 @@ pub struct MockAgentService {
 }
 
 /// この版が提供する method。ここに無い method は拒否する。
+///
+/// `operation.get` は入れない。Operation の参照は operation id を鍵にする契約で、
+/// 冪等キーである `requestId` で引く形にすると、UI に鍵の使い回しを促してしまう
+/// （`ErrorCode::RequestIdConflict` が禁じている使い方である）。Operation の
+/// 取り扱いは LF-009 の範囲なので、ここでは提供しないことを明示して拒否する。
 const SERVED: &[Method] = &[
     Method::SystemHandshake,
     Method::NodeSnapshot,
     Method::NodeStart,
     Method::NodeStop,
     Method::NodeForceStop,
-    Method::OperationGet,
 ];
 
 impl MockAgentService {
@@ -137,17 +141,6 @@ impl AgentService for MockAgentService {
             Method::NodeSnapshot => to_value(&self.backend.snapshot()),
             method @ (Method::NodeStart | Method::NodeStop | Method::NodeForceStop) => {
                 self.node_operation(method, &request.request_id, &request.payload)
-            }
-            Method::OperationGet => {
-                // 未知の requestId を「完了」や「無し」の成功へ丸めない。
-                let phase = self
-                    .backend
-                    .operation_phase(&request.request_id)
-                    .ok_or_else(|| {
-                        ErrorPayload::new(ErrorCode::RequestIdConflict)
-                            .with_detail("field", json!("requestId"))
-                    })?;
-                to_value(&phase)
             }
             // registry にはあるが、この版では提供しない。
             _ => Err(ErrorPayload::new(ErrorCode::MethodNotServed)
@@ -288,11 +281,12 @@ mod tests {
     }
 
     #[test]
-    fn operation_get_does_not_invent_a_phase_for_an_unknown_request_id() {
+    fn operation_get_is_refused_rather_than_keyed_by_the_idempotency_key() {
+        // 冪等キーで Operation を引く形を「提供済み」にしない。
         let error = service()
             .call(&request(Method::OperationGet, json!({})))
             .unwrap_err();
 
-        assert_eq!(error.code, ErrorCode::RequestIdConflict);
+        assert_eq!(error.code, ErrorCode::MethodNotServed);
     }
 }
